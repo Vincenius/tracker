@@ -45,6 +45,43 @@ const DENIED_PAGE = `<!doctype html>
 <div><h1>Zugriff gesperrt</h1><p>Diese Seite braucht ein gültiges Token.</p></div>
 </html>`;
 
+/**
+ * Icons bleiben ohne Token erreichbar. Sie enthalten keine Daten, und der
+ * Browser holt Manifest-Icons je nach Plattform ohne Cookie — sonst schlägt
+ * die Installation fehl. Das Manifest selbst ist *nicht* frei: darin steht
+ * der Token.
+ */
+const PUBLIC_FILES = new Set([
+  '/favicon.svg',
+  '/icon-192.png',
+  '/icon-512.png',
+  '/icon-maskable-512.png',
+  '/apple-touch-icon.png',
+]);
+
+/** start_url trägt den Token, weil iOS der installierten App einen eigenen
+ *  Cookie-Speicher gibt — der Cookie aus Safari zählt dort nicht. */
+function manifest() {
+  return {
+    id: '/',
+    name: 'TRACKER — Sportroutine',
+    short_name: 'Tracker',
+    description: 'Boulder- und Heimtraining festhalten.',
+    start_url: TOKEN ? `/?token=${encodeURIComponent(TOKEN)}` : '/',
+    scope: '/',
+    display: 'standalone',
+    orientation: 'portrait',
+    background_color: '#0d0c0b',
+    theme_color: '#0d0c0b',
+    lang: 'de',
+    icons: [
+      { src: '/icon-192.png', sizes: '192x192', type: 'image/png' },
+      { src: '/icon-512.png', sizes: '512x512', type: 'image/png' },
+      { src: '/icon-maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+    ],
+  };
+}
+
 /** Konstante Laufzeit, damit der Token nicht zeichenweise erraten werden kann. */
 function tokenMatches(value) {
   if (typeof value !== 'string' || value.length === 0) return false;
@@ -202,6 +239,10 @@ const server = createServer(async (req, res) => {
   const url = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`);
   const isApi = url.pathname.startsWith('/api/');
 
+  if (PUBLIC_FILES.has(url.pathname) && (req.method === 'GET' || req.method === 'HEAD')) {
+    return serveStatic(req, res, url.pathname);
+  }
+
   if (TOKEN) {
     const fromQuery = url.searchParams.get('token');
     const ok =
@@ -229,6 +270,15 @@ const server = createServer(async (req, res) => {
       });
       return res.end();
     }
+  }
+
+  if (url.pathname === '/manifest.webmanifest') {
+    // no-store: enthält den Token, gehört in keinen Proxy-Cache.
+    res.writeHead(200, {
+      'content-type': 'application/manifest+json; charset=utf-8',
+      'cache-control': 'no-store',
+    });
+    return res.end(req.method === 'HEAD' ? undefined : JSON.stringify(manifest()));
   }
 
   if (!isApi) {

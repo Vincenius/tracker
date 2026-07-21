@@ -80,16 +80,22 @@ docker compose up -d          # compose liest .env automatisch
 ```
 
 Ist die Variable **leer oder nicht gesetzt**, läuft alles ohne Schutz — praktisch
-im LAN oder hinter VPN. Ist sie **gesetzt**, antwortet die API ohne passenden
-`x-tracker-token`-Header mit `401`. Jedes Gerät öffnet dann einmalig
+im LAN oder hinter VPN. Ist sie **gesetzt**, ist *alles* gesperrt: die API **und**
+die App selbst. Jedes Gerät öffnet dann einmalig
 
 ```
 http://<server>:3025/?token=<dein-token>
 ```
 
-Der Browser merkt sich den Token, die URL wird sofort wieder sauber gemacht
-(kein Token in der History). Im offenen Internet solltest du ihn setzen — oder
-den Reverse Proxy mit Basic Auth davorhängen.
+Der Server setzt daraufhin den Cookie `tracker_token` (`HttpOnly`, ein Jahr) und
+leitet auf die saubere URL um — der Token bleibt also nicht in History oder
+Lesezeichen stehen. Ohne gültigen Token kommt `401`, bei der App als kleine
+Sperrseite statt des Tracker-Frontends. Im offenen Internet solltest du den Token
+setzen — oder den Reverse Proxy mit Basic Auth davorhängen.
+
+Frei erreichbar bleiben nur die Icons (`/icon-*.png`, `/apple-touch-icon.png`,
+`/favicon.svg`): sie enthalten keine Daten, und manche Browser holen Manifest-Icons
+ohne Cookie — sonst schlüge die Installation als App fehl.
 
 | Variable | Default | Zweck |
 | --- | --- | --- |
@@ -97,6 +103,29 @@ den Reverse Proxy mit Basic Auth davorhängen.
 | `PORT` | `3025` | Port des Backends |
 | `DATA_FILE` | `./data/tracker.json`, im Container `/data/tracker.json` | Speicherort |
 | `STATIC_DIR` | `./dist` | ausgelieferte Frontend-Dateien |
+
+## Als App aufs Handy (PWA)
+
+Die App ist installierbar: Seite im Browser öffnen → **Zum Home-Bildschirm**
+(iOS: Teilen-Menü, Android: Menü oder der Installieren-Hinweis). Danach läuft sie
+ohne Browser-Leiste und startet auch offline mit dem zuletzt gecachten Stand;
+synchronisiert wird, sobald der Server wieder erreichbar ist.
+
+Zusammenspiel mit dem Token: Das Manifest wird vom Server erzeugt und trägt den
+Token in der `start_url`. Das ist nötig, weil iOS einer installierten App einen
+**eigenen Cookie-Speicher** gibt — der Cookie aus Safari gilt dort nicht, die App
+würde sonst direkt auf der Sperrseite landen. Nebenwirkung: Der Token steckt damit
+in der Installation auf dem Gerät. Wer das nicht will, lässt `TRACKER_TOKEN` leer
+und schützt stattdessen über VPN oder Reverse Proxy.
+
+Nach einem Tokenwechsel muss die App einmal neu über den `?token=`-Link geöffnet
+(bzw. neu installiert) werden.
+
+Die Icons liegen in `public/` und werden aus dem Griff-Motiv generiert:
+
+```bash
+npm run icons        # nur nötig, wenn du Form oder Farben änderst
+```
 
 ## Entwicklung
 

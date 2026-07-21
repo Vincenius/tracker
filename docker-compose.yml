@@ -3,7 +3,7 @@ services:
     build: .
     container_name: tracker
     ports:
-      - "3024:3024"
+      - "3025:3025"
     volumes:
       # Hier liegt die einzige Datei mit deinen Daten.
       - ./data:/data

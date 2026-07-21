@@ -84,7 +84,7 @@ im LAN oder hinter VPN. Ist sie **gesetzt**, antwortet die API ohne passenden
 `x-tracker-token`-Header mit `401`. Jedes Gerät öffnet dann einmalig
 
 ```
-http://<server>:3024/?token=<dein-token>
+http://<server>:3025/?token=<dein-token>
 ```
 
 Der Browser merkt sich den Token, die URL wird sofort wieder sauber gemacht
@@ -94,7 +94,7 @@ den Reverse Proxy mit Basic Auth davorhängen.
 | Variable | Default | Zweck |
 | --- | --- | --- |
 | `TRACKER_TOKEN` | *(leer)* | Zugriffsschutz, leer = offen |
-| `PORT` | `3024` | Port des Backends |
+| `PORT` | `3025` | Port des Backends |
 | `DATA_FILE` | `./data/tracker.json`, im Container `/data/tracker.json` | Speicherort |
 | `STATIC_DIR` | `./dist` | ausgelieferte Frontend-Dateien |
 
@@ -103,10 +103,10 @@ den Reverse Proxy mit Basic Auth davorhängen.
 ```bash
 npm install
 cp .env.example .env  # optional, für TRACKER_TOKEN & Co.
-npm run dev:all  # Backend (:3025) + Vite-Dev-Server -> http://localhost:3024
+npm run dev:all  # Backend (:3025) + Vite-Dev-Server -> http://localhost:3025
 npm run dev      # nur Frontend (läuft dann rein lokal/offline)
 npm run build    # Produktions-Build nach dist/
-npm run start    # Backend liefert dist/ aus -> http://localhost:3024
+npm run start    # Backend liefert dist/ aus -> http://localhost:3025
 ```
 
 Vite proxyt `/api` im Dev-Modus auf `localhost:3025`. Die Daten landen dabei in
@@ -117,14 +117,14 @@ Stack: Vite + React + TypeScript + Tailwind v4, Backend Node ohne Dependencies.
 Schriften (Anton, Inter) werden über `@fontsource` mitgebündelt — die App braucht
 zur Laufzeit kein externes Netz.
 
-## Deploy auf dem Server (Port 3024)
+## Deploy auf dem Server (Port 3025)
 
 ```bash
 git clone <repo> tracker && cd tracker
 docker compose up -d --build
 ```
 
-Danach läuft die App auf `http://<server>:3024`. Das Image ist ein zweistufiger
+Danach läuft die App auf `http://<server>:3025`. Das Image ist ein zweistufiger
 Build: Node baut das Frontend, das schlanke Runtime-Image startet nur noch
 `server/index.js` (als User `node`, ohne Dependencies).
 
@@ -137,7 +137,7 @@ Updates:
 git pull && docker compose up -d --build
 ```
 
-Hinter einem Reverse Proxy (Caddy/Traefik/nginx) einfach auf `localhost:3024`
+Hinter einem Reverse Proxy (Caddy/Traefik/nginx) einfach auf `localhost:3025`
 weiterleiten. **Empfehlung:** per HTTPS ausliefern — sonst gehen die Daten im
 Klartext übers Netz.
 

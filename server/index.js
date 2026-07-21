@@ -16,7 +16,7 @@ import { dirname, extname, join, normalize, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const PORT = Number(process.env.PORT ?? 3024);
+const PORT = Number(process.env.PORT ?? 3025);
 const DATA_FILE = process.env.DATA_FILE ?? join(ROOT, 'data', 'tracker.json');
 const STATIC_DIR = process.env.STATIC_DIR ?? join(ROOT, 'dist');
 const TOKEN = process.env.TRACKER_TOKEN ?? '';

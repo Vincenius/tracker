@@ -1,5 +1,14 @@
 import { useRef, useState } from 'react';
-import { addWeeks, currentWeekKey, weekNumber, weekRangeLabel } from '../lib/date';
+import {
+  addDays,
+  addWeeks,
+  currentWeekKey,
+  shortDate,
+  toISODate,
+  weekNumber,
+  weekRangeLabel,
+  weekdayLabel,
+} from '../lib/date';
 import type { Tracker } from '../lib/store';
 import { summarizeWeek, type WeekSummary } from '../lib/stats';
 import { SESSION_META } from '../lib/workouts';
@@ -38,6 +47,18 @@ export function HistoryView({ tracker }: { tracker: Tracker }) {
   for (let k = start; k <= today; k = addWeeks(k, 1)) {
     weeks.push(stats.weeks.get(k) ?? summarizeWeek(k, []));
   }
+
+  // Werktage der letzten 8 Wochen, zeilenweise Mo–Fr.
+  const todayDate = toISODate(new Date());
+  const walkedDates = new Set(
+    stats.orderedWeeks.flatMap((w) => w.walks.map((walk) => walk.date)),
+  );
+  const walkDays = weeks.slice(-8).flatMap((w) =>
+    [0, 1, 2, 3, 4].map((i) => {
+      const date = addDays(w.key, i);
+      return { date, done: walkedDates.has(date), future: date > todayDate };
+    }),
+  );
 
   const totalSessions = stats.total || 1;
   const dist = (['boulder', 'home', 'fallback'] as const).map((t) => ({
@@ -106,6 +127,33 @@ export function HistoryView({ tracker }: { tracker: Tracker }) {
         <Stat value={stats.currentStreak} label="Wochen-Streak" />
         <Stat value={stats.longestStreak} label="Längster Streak" />
         <Stat value={stats.fulfilledWeeks} label="Volle Wochen" />
+      </section>
+
+      <section className="chalk-edge rounded-2xl border border-rock-700 bg-rock-900/80 p-4">
+        <h2 className="font-display text-xl uppercase">Spaziergänge</h2>
+        <p className="mt-1 text-sm text-chalk-dim">
+          Ein Punkt pro Werktag der letzten Wochen. Das Wochenende bleibt frei.
+        </p>
+        <div className="mt-4 grid grid-cols-5 gap-1.5">
+          {walkDays.map((d) => (
+            <div
+              key={d.date}
+              title={`${weekdayLabel(d.date)}, ${shortDate(d.date)}${d.done ? ' — Spaziergang' : ''}`}
+              className="aspect-square rounded-[5px] border"
+              style={{
+                background: d.done ? 'var(--color-grade-green)' : 'var(--color-rock-800)',
+                borderColor: d.done ? 'transparent' : 'var(--color-rock-700)',
+                opacity: d.future ? 0.3 : 1,
+              }}
+            />
+          ))}
+        </div>
+        <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <Stat value={stats.walkTotal} label="Spaziergänge" />
+          <Stat value={stats.walkStreak} label="Tage-Streak" />
+          <Stat value={stats.longestWalkStreak} label="Längster Streak" />
+          <Stat value={stats.walkPerfectWeeks} label="Volle Wochen" />
+        </div>
       </section>
 
       <section className="chalk-edge rounded-2xl border border-rock-700 bg-rock-900/80 p-4">

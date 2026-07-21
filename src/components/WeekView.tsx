@@ -1,8 +1,10 @@
 import { currentWeekKey, weekNumber, weekRangeLabel } from '../lib/date';
+import { summarizeWeek } from '../lib/stats';
 import type { Tracker } from '../lib/store';
 import type { SessionType } from '../lib/types';
 import { XP_PER_LEVEL } from '../lib/types';
 import { SessionCard } from './SessionCard';
+import { WalkCard } from './WalkCard';
 
 function GoalRing({ count }: { count: number }) {
   const pct = Math.min(1, count / 2);
@@ -34,10 +36,10 @@ function GoalRing({ count }: { count: number }) {
 }
 
 export function WeekView({ tracker }: { tracker: Tracker }) {
-  const { stats, addSession, removeSession } = tracker;
+  const { stats, addSession, removeSession, toggleWalk } = tracker;
   const key = currentWeekKey();
-  const week = stats.weeks.get(key);
-  const sessions = week?.sessions ?? [];
+  const week = stats.weeks.get(key) ?? summarizeWeek(key, []);
+  const sessions = week.sessions;
   const count = sessions.length;
   const has = (t: SessionType) => sessions.some((s) => s.type === t);
 
@@ -92,6 +94,8 @@ export function WeekView({ tracker }: { tracker: Tracker }) {
           </p>
         </div>
       </section>
+
+      <WalkCard week={week} toggleWalk={toggleWalk} walkStreak={stats.walkStreak} />
 
       <SessionCard
         type="home"

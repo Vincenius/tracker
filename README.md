@@ -1,6 +1,7 @@
 # TRACKER — Sportroutine
 
-Eine sehr kleine, selbst gehostete Web-App für genau eine Routine: **zwei Einheiten pro Woche**.
+Eine sehr kleine, selbst gehostete Web-App für genau eine Routine: **zwei Einheiten
+pro Woche** plus **ein Spaziergang an jedem Werktag**.
 Kein Login, kein Setup. Dahinter läuft ein winziges Backend, das alles in **einer
 JSON-Datei** speichert — damit Handy und Desktop denselben Stand sehen.
 
@@ -12,6 +13,7 @@ JSON-Datei** speichert — damit Handy und Desktop denselben Stand sehen.
 | Home-Workout, volle Einheit (~15 Min, 2 Runden) | Montag | 10 |
 | Home-Workout, Minimum (~5 Min, 1 Runde) | Montag | 5 |
 | Fallback-Einheit mit Klimmzügen | flexibel | 12 (Minimum: 6) |
+| Spaziergang | Montag – Freitag, einer pro Tag | 5 |
 
 **Wochenziel:** 2 Einheiten. Normalfall `Bouldern + Home`, in Wochen ohne Halle
 `Home + Fallback`. Die Minimum-Version zählt voll mit — der Streak soll nicht an
@@ -21,28 +23,44 @@ einem stressigen Montag zerbrechen.
 Die laufende Woche bricht den Streak nie, solange sie noch läuft. Verpasste Wochen
 werden im Verlauf neutral grau dargestellt — keine Warnungen, keine roten Zahlen.
 
-**Level:** alle 100 XP eins rauf, mit kleiner Animation.
+**Spaziergänge** laufen daneben und nach eigener Rechnung: Ziel sind fünf Werktage
+pro Woche, angehakt wird tageweise. Sie zählen **nicht** ins Wochenziel der
+Einheiten — ein verpasster Spaziergang kostet also keinen Wochen-Streak, und ein
+Spaziergang ersetzt kein Training. Ihre eigene Serie zählt aufeinanderfolgende
+**Werktage**: das Wochenende unterbricht sie nicht, zählt aber auch nicht mit.
+Der laufende Tag bricht die Serie nie. Am Wochenende lässt sich trotzdem einer
+eintragen — er gibt XP, aber zählt nicht fürs Ziel.
 
-**22 Abzeichen** in [`src/lib/badges.ts`](src/lib/badges.ts) — Meilensteine wie
+**Level:** alle 100 XP eins rauf, mit kleiner Animation. Einheiten und
+Spaziergänge zahlen auf dasselbe XP-Konto ein.
+
+**31 Abzeichen** in [`src/lib/badges.ts`](src/lib/badges.ts) — Meilensteine wie
 *Erstbegehung*, *Vier am Stück*, *Plan B gemeistert*, *Stammgast* (10× Halle),
 *Hausnummer* (25× Halle), *Stangentanz* (10 Fallback-Einheiten), *Halbjahr*,
 *Hundert*, *Zehnter Grad*; dazu Charakter-Abzeichen wie *Der Minimalist*
 (5× Minimum), *Saubere Linie* (Checkliste komplett), *Nach Plan* (Mo + Mi wie
 im Drehbuch) und *Zugabe* (Woche mit 3 Einheiten).
 
-Fünf davon sind **Überraschungen** und werden erst beim Freischalten sichtbar:
+Für die Spaziergänge: *Erster Schritt*, *Von Montag bis Freitag* (volle Woche),
+*Fünf Werktage* und *Vier Wochen am Stück* (Serien), *Feldweg* (25), *Hundert
+Runden*, *Volle Wochen* (4× fünf von fünf) und *Doppelt geliefert* — eine Woche
+mit Trainingsziel **und** allen fünf Spaziergängen.
+
+Sechs davon sind **Überraschungen** und werden erst beim Freischalten sichtbar:
 *Morgengrauen* (vor 9 Uhr), *Nachtschicht* (ab 21 Uhr), *Wochenend-Projekt*,
-*Trotzdem* (eine Woche komplett im Minimum) und *Wiedereinstieg* (volle Woche
-nach ≥ 2 Wochen Pause). Alle Bedingungen werden aus den vorhandenen Einheiten
-berechnet — auch rückwirkend, wenn neue Abzeichen dazukommen.
+*Trotzdem* (eine Woche komplett im Minimum), *Wiedereinstieg* (volle Woche
+nach ≥ 2 Wochen Pause) und *Extrarunde* (5 Spaziergänge am Wochenende). Alle
+Bedingungen werden aus den vorhandenen Einträgen berechnet — auch rückwirkend, wenn neue Abzeichen dazukommen.
 
 ## Screens
 
 1. **Diese Woche** — was noch offen ist, große Abhak-Buttons (Bouldern = ein Tap),
    Wochenziel-Ring, Streak, Level und XP-Balken. Jede Einheit lässt sich aufklappen:
-   Übungsliste als optionale Checkliste plus Timer für Plank/Runden.
-2. **Verlauf** — Heatmap über die Wochen (Contribution-Graph-Stil), Statistiken
-   und Export/Import/Zurücksetzen der Daten.
+   Übungsliste als optionale Checkliste plus Timer für Plank/Runden. Darunter die
+   Spaziergangs-Karte mit einer Reihe Mo–So: antippen hakt den Tag ab, nochmal
+   antippen nimmt ihn zurück. Vergangene Tage lassen sich nachtragen, künftige nicht.
+2. **Verlauf** — Heatmap über die Wochen (Contribution-Graph-Stil), ein Raster der
+   Werktage mit Spaziergang, Statistiken und Export/Import/Zurücksetzen der Daten.
 3. **Abzeichen** — freigeschaltete und offene Badges mit Fortschrittsbalken.
 
 ## Mehrere Geräte / Synchronisation
@@ -62,9 +80,9 @@ Synchronisiert wird beim Start, nach jeder Änderung, beim Zurückkehren zur App
 und einmal pro Minute. Der Punkt oben rechts zeigt den Zustand (grün = synchron,
 grau = offline) und synchronisiert per Klick sofort.
 
-**Merge statt Überschreiben:** Einheiten sind unveränderlich und haben eine
-eindeutige ID, gemergt wird also die Vereinigung beider Stände. Gelöschte
-Einheiten landen in `deleted` (Tombstones), damit ein zweites Gerät sie nicht
+**Merge statt Überschreiben:** Einheiten und Spaziergänge sind unveränderlich und
+haben eine eindeutige ID, gemergt wird also die Vereinigung beider Stände. Gelöschte
+Einträge landen in `deleted` (Tombstones), damit ein zweites Gerät sie nicht
 wieder hochschiebt. Zwei Geräte können damit auch offline nebeneinander abhaken,
 ohne dass etwas verloren geht.
 
@@ -197,9 +215,16 @@ In der App geht es auch ohne Shell: Verlauf → *Daten* → **Export (JSON)** l�
       "done": ["pushups", "plank"] // optional abgehakte Übungen
     }
   ],
+  "walks": [
+    {
+      "id": "m2x4k2-77c1de",
+      "date": "2026-07-20",  // ein Eintrag pro Tag
+      "ts": 1753000000000    // Zeitpunkt des Eintragens
+    }
+  ],
   "seenBadges": ["first-week"],
   "seenLevel": 2,
-  "deleted": ["alte-id"]        // Tombstones gelöschter Einheiten
+  "deleted": ["alte-id"]        // Tombstones gelöschter Einträge
 }
 ```
 

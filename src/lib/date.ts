@@ -19,6 +19,25 @@ export function startOfWeek(d: Date): Date {
   return c;
 }
 
+export function addDays(dateIso: string, n: number): string {
+  const d = fromISODate(dateIso);
+  d.setDate(d.getDate() + n);
+  return toISODate(d);
+}
+
+/** Montag–Freitag. Spaziergänge zielen nur auf diese Tage. */
+export function isWeekday(dateIso: string): boolean {
+  const dow = fromISODate(dateIso).getDay();
+  return dow >= 1 && dow <= 5;
+}
+
+/** Der vorherige Werktag — das Wochenende wird übersprungen, nicht gewertet. */
+export function prevWeekday(dateIso: string): string {
+  let d = addDays(dateIso, -1);
+  while (!isWeekday(d)) d = addDays(d, -1);
+  return d;
+}
+
 export function weekKeyOf(dateIso: string): string {
   return toISODate(startOfWeek(fromISODate(dateIso)));
 }

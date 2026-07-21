@@ -5,7 +5,7 @@ import { toISODate } from './date';
 import { mergeData, sameData } from './merge';
 import { computeStats } from './stats';
 import { exportFile, importFile, loadData, saveData, emptyData } from './storage';
-import type { AppData, Intensity, Session, SessionType } from './types';
+import type { AppData, Intensity, Session, SessionType, Walk } from './types';
 
 export interface Celebration {
   level?: number;
@@ -23,7 +23,7 @@ function newId(): string {
 
 /** Beim Laden/Mergen gelten alle erfüllten Badges/Level als gesehen – keine Nachfeier. */
 function normalizeSeen(data: AppData): AppData {
-  const stats = computeStats(data.sessions);
+  const stats = computeStats(data.sessions, data.walks);
   return { ...data, seenBadges: unlockedBadges(stats), seenLevel: stats.level };
 }
 
@@ -37,7 +37,7 @@ export function useTracker() {
   const latest = useRef(data);
   latest.current = data;
 
-  const stats = useMemo(() => computeStats(data.sessions), [data.sessions]);
+  const stats = useMemo(() => computeStats(data.sessions, data.walks), [data.sessions, data.walks]);
 
   const flash = useCallback((msg: string) => {
     setToast(msg);
@@ -93,19 +93,10 @@ export function useTracker() {
     };
   }, [pushAndPull]);
 
-  const addSession = useCallback(
-    (type: SessionType, intensity: Intensity, done: string[] = []) => {
-      const prev = latest.current;
-      const session: Session = {
-        id: newId(),
-        type,
-        intensity,
-        date: toISODate(new Date()),
-        ts: Date.now(),
-        done,
-      };
-      const sessions = [...prev.sessions, session];
-      const nextStats = computeStats(sessions);
+  /** Fortschritt übernehmen und alles feiern, was dabei neu freigeschaltet wurde. */
+  const commitEarned = useCallback(
+    (prev: AppData, next: Pick<AppData, 'sessions' | 'walks'>) => {
+      const nextStats = computeStats(next.sessions, next.walks);
       const unlocked = unlockedBadges(nextStats);
       const fresh = unlocked.filter((id) => !prev.seenBadges.includes(id));
       const leveledUp = nextStats.level > prev.seenLevel;
@@ -117,11 +108,27 @@ export function useTracker() {
         });
       }
 
-      commit({ ...prev, sessions, seenBadges: unlocked, seenLevel: nextStats.level });
+      commit({ ...prev, ...next, seenBadges: unlocked, seenLevel: nextStats.level });
       schedulePush();
-      return session;
     },
     [commit, schedulePush],
+  );
+
+  const addSession = useCallback(
+    (type: SessionType, intensity: Intensity, done: string[] = []) => {
+      const prev = latest.current;
+      const session: Session = {
+        id: newId(),
+        type,
+        intensity,
+        date: toISODate(new Date()),
+        ts: Date.now(),
+        done,
+      };
+      commitEarned(prev, { sessions: [...prev.sessions, session], walks: prev.walks });
+      return session;
+    },
+    [commitEarned],
   );
 
   const removeSession = useCallback(
@@ -133,12 +140,42 @@ export function useTracker() {
         sessions,
         // Tombstone, sonst schiebt ein anderes Gerät die Einheit zurück.
         deleted: [...new Set([...prev.deleted, id])],
-        seenLevel: computeStats(sessions).level,
+        seenLevel: computeStats(sessions, prev.walks).level,
       });
       schedulePush();
       flash('Einheit entfernt.');
     },
     [commit, flash, schedulePush],
+  );
+
+  /**
+   * Spaziergang für einen Tag an- oder abhaken. Pro Tag zählt genau einer —
+   * ein zweiter Klick nimmt ihn wieder zurück.
+   */
+  const toggleWalk = useCallback(
+    (date: string) => {
+      const prev = latest.current;
+      const existing = prev.walks.filter((w) => w.date === date);
+
+      if (existing.length) {
+        const ids = new Set(existing.map((w) => w.id));
+        const walks = prev.walks.filter((w) => !ids.has(w.id));
+        commit({
+          ...prev,
+          walks,
+          deleted: [...new Set([...prev.deleted, ...ids])],
+          seenLevel: computeStats(prev.sessions, walks).level,
+        });
+        schedulePush();
+        flash('Spaziergang entfernt.');
+        return;
+      }
+
+      // ts trägt den Zeitpunkt des Eintragens – das Datum steht in `date`.
+      const walk: Walk = { id: newId(), date, ts: Date.now() };
+      commitEarned(prev, { sessions: prev.sessions, walks: [...prev.walks, walk] });
+    },
+    [commit, commitEarned, flash, schedulePush],
   );
 
   /** Import & Zurücksetzen ersetzen den Server-Stand, statt ihn zu mergen. */
@@ -191,6 +228,7 @@ export function useTracker() {
     flash,
     addSession,
     removeSession,
+    toggleWalk,
     resetAll,
     doExport,
     doImport,

@@ -26,7 +26,7 @@ const DATA_FILE = process.env.DATA_FILE ?? join(ROOT, 'data', 'tracker.json');
 const STATIC_DIR = process.env.STATIC_DIR ?? join(ROOT, 'dist');
 const TOKEN = process.env.TRACKER_TOKEN ?? '';
 
-const EMPTY = { version: 1, sessions: [], seenBadges: [], seenLevel: 1, deleted: [] };
+const EMPTY = { version: 1, sessions: [], walks: [], seenBadges: [], seenLevel: 1, deleted: [] };
 
 const COOKIE_NAME = 'tracker_token';
 const COOKIE_MAX_AGE = 60 * 60 * 24 * 365;
@@ -137,26 +137,38 @@ function sanitize(raw) {
           typeof s.ts === 'number',
       )
     : [];
+  const walks = Array.isArray(d.walks)
+    ? d.walks.filter(
+        (w) =>
+          w && typeof w.id === 'string' && typeof w.date === 'string' && typeof w.ts === 'number',
+      )
+    : [];
   const strings = (v) => (Array.isArray(v) ? v.filter((x) => typeof x === 'string') : []);
   return {
     version: 1,
     sessions,
+    walks,
     seenBadges: strings(d.seenBadges),
     seenLevel: typeof d.seenLevel === 'number' ? d.seenLevel : 1,
     deleted: strings(d.deleted),
   };
 }
 
-/** Union der Einheiten, Tombstones gewinnen. Muss zu src/lib/merge.ts passen. */
+/** Union der Einträge, Tombstones gewinnen. Muss zu src/lib/merge.ts passen. */
+function union(a, b, deleted) {
+  const byId = new Map();
+  for (const item of [...a, ...b]) {
+    if (!deleted.has(item.id)) byId.set(item.id, item);
+  }
+  return [...byId.values()].sort((x, y) => x.ts - y.ts);
+}
+
 function merge(a, b) {
   const deleted = new Set([...a.deleted, ...b.deleted]);
-  const byId = new Map();
-  for (const s of [...a.sessions, ...b.sessions]) {
-    if (!deleted.has(s.id)) byId.set(s.id, s);
-  }
   return {
     version: 1,
-    sessions: [...byId.values()].sort((x, y) => x.ts - y.ts),
+    sessions: union(a.sessions, b.sessions, deleted),
+    walks: union(a.walks, b.walks, deleted),
     seenBadges: [...new Set([...a.seenBadges, ...b.seenBadges])],
     seenLevel: Math.max(a.seenLevel, b.seenLevel),
     deleted: [...deleted],

@@ -45,6 +45,7 @@ const TAPE = 'var(--color-tape)';
 const CHALK = 'var(--color-chalk)';
 
 const bestStreak = (s: Stats) => Math.max(s.currentStreak, s.longestStreak);
+const bestWalkStreak = (s: Stats) => Math.max(s.walkStreak, s.longestWalkStreak);
 
 export const BADGES: Badge[] = [
   counter(
@@ -187,6 +188,80 @@ export const BADGES: Badge[] = [
   ),
   counter('level-10', 'Zehnter Grad', '900 XP gesammelt. Level 10.', TAPE, 900, 'XP', (s) => s.xp),
 
+  // ——— Spaziergänge: Montag bis Freitag, einer pro Tag ———
+  counter(
+    'walk-first',
+    'Erster Schritt',
+    'Der erste Spaziergang ist eingetragen. Tür auf, der Rest ergibt sich.',
+    GREEN,
+    1,
+    'Spaziergang',
+    (s) => s.walkTotal,
+  ),
+  counter(
+    'walk-week',
+    'Von Montag bis Freitag',
+    'Eine Woche mit fünf Spaziergängen an fünf Werktagen.',
+    GREEN,
+    1,
+    'Woche',
+    (s) => s.walkPerfectWeeks,
+  ),
+  counter(
+    'walk-streak-5',
+    'Fünf Werktage',
+    '5 Werktage in Folge spazieren. Das Wochenende zählt nicht dagegen.',
+    YELLOW,
+    5,
+    'Tage',
+    bestWalkStreak,
+  ),
+  counter(
+    'walk-25',
+    'Feldweg',
+    '25 Spaziergänge gesammelt.',
+    BLUE,
+    25,
+    'Spaziergänge',
+    (s) => s.walkTotal,
+  ),
+  counter(
+    'walk-perfect-4',
+    'Volle Wochen',
+    '4 Wochen mit allen fünf Spaziergängen.',
+    GREEN,
+    4,
+    'Wochen',
+    (s) => s.walkPerfectWeeks,
+  ),
+  counter(
+    'double-goal',
+    'Doppelt geliefert',
+    'Eine Woche mit Trainingsziel und allen fünf Spaziergängen.',
+    RED,
+    1,
+    'Woche',
+    (s) => s.doubleGoalWeeks,
+  ),
+  counter(
+    'walk-streak-20',
+    'Vier Wochen am Stück',
+    '20 Werktage in Folge — einen ganzen Monat lang jeden Tag raus.',
+    TAPE,
+    20,
+    'Tage',
+    bestWalkStreak,
+  ),
+  counter(
+    'walk-100',
+    'Hundert Runden',
+    '100 Spaziergänge. Die Nachbarschaft kennt dich.',
+    CHALK,
+    100,
+    'Spaziergänge',
+    (s) => s.walkTotal,
+  ),
+
   // ——— Überraschungen: tauchen erst auf, wenn du sie hast ———
   counter(
     'early-bird',
@@ -228,6 +303,17 @@ export const BADGES: Badge[] = [
     (s) => s.allMinWeeks,
     true,
   ),
+  counter(
+    'walk-extra',
+    'Extrarunde',
+    '5 Spaziergänge am Wochenende. Zählt nicht fürs Ziel — schön war es trotzdem.',
+    PURPLE,
+    5,
+    'Spaziergänge',
+    (s) => s.weekendWalks,
+    true,
+  ),
+
   counter(
     'comeback',
     'Wiedereinstieg',

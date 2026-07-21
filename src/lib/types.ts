@@ -12,16 +12,31 @@ export interface Session {
   done?: string[];
 }
 
+/** Ein Spaziergang an einem Tag. Ziel: Montag bis Freitag jeweils einer. */
+export interface Walk {
+  id: string;
+  /** ISO-Datum, z.B. 2026-07-20 */
+  date: string;
+  ts: number;
+}
+
 export interface AppData {
   version: 1;
   sessions: Session[];
+  walks: Walk[];
   /** Bereits gefeierte Badges – verhindert doppelte Animationen */
   seenBadges: string[];
   /** Bereits erreichtes Level – für die Level-Up-Animation */
   seenLevel: number;
-  /** IDs gelöschter Einheiten (Tombstones), damit sie beim Sync nicht zurückkommen */
+  /** IDs gelöschter Einheiten und Spaziergänge (Tombstones), damit sie beim Sync nicht zurückkommen */
   deleted: string[];
 }
+
+/** Ein Spaziergang ist klein — er zählt trotzdem. */
+export const XP_WALK = 5;
+
+/** Zielanzahl Spaziergänge pro Woche: Montag bis Freitag. */
+export const WALK_GOAL = 5;
 
 export const XP: Record<SessionType, Record<Intensity, number>> = {
   boulder: { full: 15, min: 15 },

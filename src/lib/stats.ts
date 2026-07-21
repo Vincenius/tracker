@@ -1,6 +1,15 @@
-import { addWeeks, currentWeekKey, fromISODate, weekKeyOf, weeksBetween } from './date';
-import type { Session, SessionType } from './types';
-import { XP_PER_LEVEL, xpFor } from './types';
+import {
+  addWeeks,
+  currentWeekKey,
+  fromISODate,
+  isWeekday,
+  prevWeekday,
+  toISODate,
+  weekKeyOf,
+  weeksBetween,
+} from './date';
+import type { Session, SessionType, Walk } from './types';
+import { WALK_GOAL, XP_PER_LEVEL, XP_WALK, xpFor } from './types';
 import { WORKOUTS } from './workouts';
 
 /** Wurde beim Abhaken die komplette Übungsliste mit abgehakt? */
@@ -17,6 +26,11 @@ export interface WeekSummary {
   fulfilled: boolean;
   /** Woche wurde ohne Bouldern erfüllt (Home + Fallback) */
   fallbackWeek: boolean;
+  walks: Walk[];
+  /** Werktage (Mo–Fr) mit Spaziergang */
+  walkDays: number;
+  /** alle fünf Werktage mit Spaziergang */
+  walkPerfect: boolean;
   xp: number;
 }
 
@@ -51,25 +65,47 @@ export interface Stats {
   comebacks: number;
   /** erfüllte Wochen, in denen ausschließlich Minimum-Einheiten liefen */
   allMinWeeks: number;
+  /** Spaziergänge insgesamt */
+  walkTotal: number;
+  /** Werktage mit Spaziergang insgesamt */
+  walkWeekdays: number;
+  /** Spaziergänge am Wochenende */
+  weekendWalks: number;
+  /** Wochen mit allen fünf Werktagen */
+  walkPerfectWeeks: number;
+  /** Wochen mit mindestens drei Werktagen */
+  walkSolidWeeks: number;
+  /** laufende Serie an Werktagen mit Spaziergang (Wochenende zählt nicht dazwischen) */
+  walkStreak: number;
+  longestWalkStreak: number;
+  /** Wochen, in denen sowohl Trainings- als auch Spaziergangsziel erfüllt wurden */
+  doubleGoalWeeks: number;
 }
 
-export function summarizeWeek(key: string, sessions: Session[]): WeekSummary {
+export function summarizeWeek(key: string, sessions: Session[], walks: Walk[] = []): WeekSummary {
   const count = sessions.length;
   const has = (t: SessionType) => sessions.some((s) => s.type === t);
   // Vergebend: zwei Einheiten reichen. Die Kombinationen Bouldern+Home und
   // Home+Fallback sind der Normalfall, alles andere wird nicht bestraft.
   const fulfilled = count >= 2;
+  // Pro Tag zählt ein Spaziergang. Zwei Geräte können denselben Tag eintragen —
+  // beim Mergen bleiben beide erhalten, gewertet wird der Tag trotzdem einmal.
+  const dates = new Set(walks.map((w) => w.date));
+  const walkDays = [...dates].filter(isWeekday).length;
   return {
     key,
     sessions,
     count,
     fulfilled,
     fallbackWeek: fulfilled && has('fallback') && !has('boulder'),
-    xp: sessions.reduce((sum, s) => sum + xpFor(s), 0),
+    walks,
+    walkDays,
+    walkPerfect: walkDays >= WALK_GOAL,
+    xp: sessions.reduce((sum, s) => sum + xpFor(s), 0) + dates.size * XP_WALK,
   };
 }
 
-export function computeStats(sessions: Session[], now = new Date()): Stats {
+export function computeStats(sessions: Session[], walks: Walk[] = [], now = new Date()): Stats {
   const buckets = new Map<string, Session[]>();
   for (const s of sessions) {
     const k = weekKeyOf(s.date);
@@ -78,15 +114,27 @@ export function computeStats(sessions: Session[], now = new Date()): Stats {
     else buckets.set(k, [s]);
   }
 
+  const walkBuckets = new Map<string, Walk[]>();
+  for (const w of walks) {
+    const k = weekKeyOf(w.date);
+    const arr = walkBuckets.get(k);
+    if (arr) arr.push(w);
+    else walkBuckets.set(k, [w]);
+  }
+
   const thisWeek = currentWeekKey(now);
-  const keys = [...buckets.keys()].sort();
+  const keys = [...buckets.keys(), ...walkBuckets.keys()].sort();
   const first = keys[0] ?? thisWeek;
   const span = weeksBetween(first < thisWeek ? first : thisWeek, thisWeek);
 
   const weeks = new Map<string, WeekSummary>();
   const orderedWeeks: WeekSummary[] = [];
   for (const k of span) {
-    const w = summarizeWeek(k, (buckets.get(k) ?? []).slice().sort((a, b) => a.ts - b.ts));
+    const w = summarizeWeek(
+      k,
+      (buckets.get(k) ?? []).slice().sort((a, b) => a.ts - b.ts),
+      (walkBuckets.get(k) ?? []).slice().sort((a, b) => a.ts - b.ts),
+    );
     weeks.set(k, w);
     orderedWeeks.push(w);
   }
@@ -126,12 +174,44 @@ export function computeStats(sessions: Session[], now = new Date()): Stats {
     if (isFullyChecked(s)) fullChecklists++;
   }
 
+  // ——— Spaziergänge ———
+  const walkDates = new Set(walks.map((w) => w.date));
+  xp += walkDates.size * XP_WALK;
+  const weekdayWalks = [...walkDates].filter(isWeekday);
+  const weekendWalks = walkDates.size - weekdayWalks.length;
+
+  // Serie über Werktage: das Wochenende unterbricht nicht, es zählt nur nicht mit.
+  // Der heutige Tag bricht die Serie nicht, solange er noch läuft.
+  const today = toISODate(now);
+  let walkStreak = 0;
+  let cursorDay = walkDates.has(today) && isWeekday(today) ? today : prevWeekday(today);
+  while (walkDates.has(cursorDay)) {
+    walkStreak++;
+    cursorDay = prevWeekday(cursorDay);
+  }
+
+  let longestWalkStreak = 0;
+  const sortedWeekdays = weekdayWalks.slice().sort();
+  let walkRun = 0;
+  let prevDay: string | null = null;
+  for (const day of sortedWeekdays) {
+    walkRun = prevDay && prevWeekday(day) === prevDay ? walkRun + 1 : 1;
+    if (walkRun > longestWalkStreak) longestWalkStreak = walkRun;
+    prevDay = day;
+  }
+
   let bigWeeks = 0;
   let onPlanWeeks = 0;
   let comebacks = 0;
   let allMinWeeks = 0;
   let emptyRun = 0;
+  let walkPerfectWeeks = 0;
+  let walkSolidWeeks = 0;
+  let doubleGoalWeeks = 0;
   for (const w of orderedWeeks) {
+    if (w.walkPerfect) walkPerfectWeeks++;
+    if (w.walkDays >= 3) walkSolidWeeks++;
+    if (w.fulfilled && w.walkPerfect) doubleGoalWeeks++;
     if (w.count >= 3) bigWeeks++;
     if (w.fulfilled && w.sessions.every((s) => s.intensity === 'min')) allMinWeeks++;
     const onPlan =
@@ -166,5 +246,13 @@ export function computeStats(sessions: Session[], now = new Date()): Stats {
     onPlanWeeks,
     comebacks,
     allMinWeeks,
+    walkTotal: walkDates.size,
+    walkWeekdays: weekdayWalks.length,
+    weekendWalks,
+    walkPerfectWeeks,
+    walkSolidWeeks,
+    walkStreak,
+    longestWalkStreak,
+    doubleGoalWeeks,
   };
 }

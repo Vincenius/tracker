@@ -87,7 +87,7 @@ export default function App() {
       </main>
 
       <footer className="mt-8 hidden text-center text-xs text-chalk-faint sm:block">
-        Zwei Einheiten pro Woche. Minimum zählt voll.
+        Zwei Einheiten pro Woche, ein Spaziergang pro Werktag. Minimum zählt voll.
       </footer>
 
       {/* Mobile-Navigation */}

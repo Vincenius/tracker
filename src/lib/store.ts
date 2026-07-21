@@ -5,7 +5,10 @@ import { toISODate } from './date';
 import { mergeData, sameData } from './merge';
 import { computeStats } from './stats';
 import { exportFile, importFile, loadData, saveData, emptyData } from './storage';
-import type { AppData, Intensity, Session, SessionType, Walk } from './types';
+import type { AppData, CleanDay, CleanKind, Intensity, Session, SessionType, Walk } from './types';
+
+/** Was `commitEarned` an Fortschritt entgegennimmt. */
+type Progress = Pick<AppData, 'sessions' | 'walks' | 'cleanDays'>;
 
 export interface Celebration {
   level?: number;
@@ -23,7 +26,7 @@ function newId(): string {
 
 /** Beim Laden/Mergen gelten alle erfüllten Badges/Level als gesehen – keine Nachfeier. */
 function normalizeSeen(data: AppData): AppData {
-  const stats = computeStats(data.sessions, data.walks);
+  const stats = computeStats(data.sessions, data.walks, data.cleanDays);
   return { ...data, seenBadges: unlockedBadges(stats), seenLevel: stats.level };
 }
 
@@ -37,7 +40,10 @@ export function useTracker() {
   const latest = useRef(data);
   latest.current = data;
 
-  const stats = useMemo(() => computeStats(data.sessions, data.walks), [data.sessions, data.walks]);
+  const stats = useMemo(
+    () => computeStats(data.sessions, data.walks, data.cleanDays),
+    [data.sessions, data.walks, data.cleanDays],
+  );
 
   const flash = useCallback((msg: string) => {
     setToast(msg);
@@ -95,8 +101,13 @@ export function useTracker() {
 
   /** Fortschritt übernehmen und alles feiern, was dabei neu freigeschaltet wurde. */
   const commitEarned = useCallback(
-    (prev: AppData, next: Pick<AppData, 'sessions' | 'walks'>) => {
-      const nextStats = computeStats(next.sessions, next.walks);
+    (prev: AppData, patch: Partial<Progress>) => {
+      const next: Progress = {
+        sessions: patch.sessions ?? prev.sessions,
+        walks: patch.walks ?? prev.walks,
+        cleanDays: patch.cleanDays ?? prev.cleanDays,
+      };
+      const nextStats = computeStats(next.sessions, next.walks, next.cleanDays);
       const unlocked = unlockedBadges(nextStats);
       const fresh = unlocked.filter((id) => !prev.seenBadges.includes(id));
       const leveledUp = nextStats.level > prev.seenLevel;
@@ -114,6 +125,30 @@ export function useTracker() {
     [commit, schedulePush],
   );
 
+  /**
+   * Etwas zurücknehmen. Tombstones setzen, damit ein anderes Gerät den Eintrag
+   * nicht zurückschiebt, und `seenLevel` nachziehen — sonst feiert die App
+   * dasselbe Level beim nächsten Mal erneut.
+   */
+  const commitRemoved = useCallback(
+    (prev: AppData, patch: Partial<Progress>, ids: Iterable<string>, msg: string) => {
+      const next: Progress = {
+        sessions: patch.sessions ?? prev.sessions,
+        walks: patch.walks ?? prev.walks,
+        cleanDays: patch.cleanDays ?? prev.cleanDays,
+      };
+      commit({
+        ...prev,
+        ...next,
+        deleted: [...new Set([...prev.deleted, ...ids])],
+        seenLevel: computeStats(next.sessions, next.walks, next.cleanDays).level,
+      });
+      schedulePush();
+      flash(msg);
+    },
+    [commit, flash, schedulePush],
+  );
+
   const addSession = useCallback(
     (type: SessionType, intensity: Intensity, done: string[] = []) => {
       const prev = latest.current;
@@ -125,7 +160,7 @@ export function useTracker() {
         ts: Date.now(),
         done,
       };
-      commitEarned(prev, { sessions: [...prev.sessions, session], walks: prev.walks });
+      commitEarned(prev, { sessions: [...prev.sessions, session] });
       return session;
     },
     [commitEarned],
@@ -134,18 +169,14 @@ export function useTracker() {
   const removeSession = useCallback(
     (id: string) => {
       const prev = latest.current;
-      const sessions = prev.sessions.filter((s) => s.id !== id);
-      commit({
-        ...prev,
-        sessions,
-        // Tombstone, sonst schiebt ein anderes Gerät die Einheit zurück.
-        deleted: [...new Set([...prev.deleted, id])],
-        seenLevel: computeStats(sessions, prev.walks).level,
-      });
-      schedulePush();
-      flash('Einheit entfernt.');
+      commitRemoved(
+        prev,
+        { sessions: prev.sessions.filter((s) => s.id !== id) },
+        [id],
+        'Einheit entfernt.',
+      );
     },
-    [commit, flash, schedulePush],
+    [commitRemoved],
   );
 
   /**
@@ -159,23 +190,46 @@ export function useTracker() {
 
       if (existing.length) {
         const ids = new Set(existing.map((w) => w.id));
-        const walks = prev.walks.filter((w) => !ids.has(w.id));
-        commit({
-          ...prev,
-          walks,
-          deleted: [...new Set([...prev.deleted, ...ids])],
-          seenLevel: computeStats(prev.sessions, walks).level,
-        });
-        schedulePush();
-        flash('Spaziergang entfernt.');
+        commitRemoved(
+          prev,
+          { walks: prev.walks.filter((w) => !ids.has(w.id)) },
+          ids,
+          'Spaziergang entfernt.',
+        );
         return;
       }
 
       // ts trägt den Zeitpunkt des Eintragens – das Datum steht in `date`.
       const walk: Walk = { id: newId(), date, ts: Date.now() };
-      commitEarned(prev, { sessions: prev.sessions, walks: [...prev.walks, walk] });
+      commitEarned(prev, { walks: [...prev.walks, walk] });
     },
-    [commit, commitEarned, flash, schedulePush],
+    [commitEarned, commitRemoved],
+  );
+
+  /**
+   * Sauberen Tag in einer Spur an- oder abhaken. Wie beim Spaziergang zählt
+   * pro Tag genau ein Eintrag; ein zweiter Klick korrigiert einen Fehlgriff.
+   */
+  const toggleClean = useCallback(
+    (date: string, kind: CleanKind) => {
+      const prev = latest.current;
+      const existing = prev.cleanDays.filter((c) => c.date === date && c.kind === kind);
+
+      if (existing.length) {
+        const ids = new Set(existing.map((c) => c.id));
+        commitRemoved(
+          prev,
+          { cleanDays: prev.cleanDays.filter((c) => !ids.has(c.id)) },
+          ids,
+          'Tag zurückgenommen.',
+        );
+        return;
+      }
+
+      const entry: CleanDay = { id: newId(), date, kind, ts: Date.now() };
+      commitEarned(prev, { cleanDays: [...prev.cleanDays, entry] });
+    },
+    [commitEarned, commitRemoved],
   );
 
   /** Import & Zurücksetzen ersetzen den Server-Stand, statt ihn zu mergen. */
@@ -229,6 +283,7 @@ export function useTracker() {
     addSession,
     removeSession,
     toggleWalk,
+    toggleClean,
     resetAll,
     doExport,
     doImport,

@@ -9,6 +9,7 @@ import {
   weekRangeLabel,
   weekdayLabel,
 } from '../lib/date';
+import { LANE_LIST } from '../lib/nutrition';
 import type { Tracker } from '../lib/store';
 import { summarizeWeek, type WeekSummary } from '../lib/stats';
 import { SESSION_META } from '../lib/workouts';
@@ -57,6 +58,14 @@ export function HistoryView({ tracker }: { tracker: Tracker }) {
     [0, 1, 2, 3, 4].map((i) => {
       const date = addDays(w.key, i);
       return { date, done: walkedDates.has(date), future: date > todayDate };
+    }),
+  );
+
+  // Ernährung läuft an allen sieben Tagen — hier die letzten 8 Wochen am Stück.
+  const foodDays = weeks.slice(-8).flatMap((w) =>
+    [0, 1, 2, 3, 4, 5, 6].map((i) => {
+      const date = addDays(w.key, i);
+      return { date, future: date > todayDate };
     }),
   );
 
@@ -153,6 +162,50 @@ export function HistoryView({ tracker }: { tracker: Tracker }) {
           <Stat value={stats.walkStreak} label="Tage-Streak" />
           <Stat value={stats.longestWalkStreak} label="Längster Streak" />
           <Stat value={stats.walkPerfectWeeks} label="Volle Wochen" />
+        </div>
+      </section>
+
+      <section className="chalk-edge rounded-2xl border border-rock-700 bg-rock-900/80 p-4">
+        <h2 className="font-display text-xl uppercase">Ernährung</h2>
+        <p className="mt-1 text-sm text-chalk-dim">
+          Zwei Zeilen pro Woche: oben Schokolade & Chips, unten Zuckergetränke.
+        </p>
+        <div className="mt-4 space-y-3">
+          {LANE_LIST.map((lane) => {
+            const dates = stats.lanes[lane.kind].dates;
+            return (
+              <div key={lane.kind}>
+                <div className="mb-1.5 flex items-center gap-2 text-xs text-chalk-faint">
+                  <i className="h-2.5 w-2.5 rounded-full" style={{ background: lane.color }} />
+                  {lane.short}
+                  <span className="ml-auto tabular-nums">
+                    {stats.lanes[lane.kind].total} Tage · Bestserie{' '}
+                    {stats.lanes[lane.kind].longestStreak}
+                  </span>
+                </div>
+                <div className="grid grid-cols-[repeat(auto-fill,minmax(14px,1fr))] gap-1">
+                  {foodDays.map((d) => (
+                    <div
+                      key={`${lane.kind}-${d.date}`}
+                      title={`${weekdayLabel(d.date)}, ${shortDate(d.date)}`}
+                      className="aspect-square rounded-[4px] border"
+                      style={{
+                        background: dates.has(d.date) ? lane.color : 'var(--color-rock-800)',
+                        borderColor: dates.has(d.date) ? 'transparent' : 'var(--color-rock-700)',
+                        opacity: d.future ? 0.3 : 1,
+                      }}
+                    />
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <Stat value={stats.cleanBothDays} label="Volle Tage" />
+          <Stat value={stats.cleanBothStreak} label="Tage-Streak" />
+          <Stat value={stats.longestCleanBothStreak} label="Längster Streak" />
+          <Stat value={stats.cleanPerfectWeeks} label="Volle Wochen" />
         </div>
       </section>
 

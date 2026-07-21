@@ -1,4 +1,5 @@
 import {
+  addDays,
   addWeeks,
   currentWeekKey,
   fromISODate,
@@ -8,8 +9,16 @@ import {
   weekKeyOf,
   weeksBetween,
 } from './date';
-import type { Session, SessionType, Walk } from './types';
-import { WALK_GOAL, XP_PER_LEVEL, XP_WALK, xpFor } from './types';
+import type { CleanDay, CleanKind, Session, SessionType, Walk } from './types';
+import {
+  CLEAN_KINDS,
+  WALK_GOAL,
+  XP_CLEAN_COMBO,
+  XP_PER_LEVEL,
+  XP_WALK,
+  xpFor,
+  xpForCleanDay,
+} from './types';
 import { WORKOUTS } from './workouts';
 
 /** Wurde beim Abhaken die komplette Übungsliste mit abgehakt? */
@@ -17,6 +26,22 @@ function isFullyChecked(s: Session): boolean {
   const exercises = WORKOUTS[s.type][s.intensity].exercises;
   const done = s.done ?? [];
   return exercises.length > 0 && exercises.every((ex) => done.includes(ex.id));
+}
+
+/** Sieben Tage pro Woche — Ernährung kennt kein Wochenende. */
+export const CLEAN_GOAL = 7;
+
+export interface LaneStats {
+  kind: CleanKind;
+  /** Alle sauberen Tage dieser Spur */
+  dates: Set<string>;
+  total: number;
+  /** Laufende Serie; der heutige Tag bricht sie nicht, solange er läuft */
+  currentStreak: number;
+  longestStreak: number;
+  /** XP, die der nächste saubere Tag in dieser Spur bringt */
+  nextXp: number;
+  xp: number;
 }
 
 export interface WeekSummary {
@@ -31,6 +56,13 @@ export interface WeekSummary {
   walkDays: number;
   /** alle fünf Werktage mit Spaziergang */
   walkPerfect: boolean;
+  clean: CleanDay[];
+  /** saubere Tage je Spur in dieser Woche */
+  cleanDays: Record<CleanKind, number>;
+  /** Tage, an denen beide Spuren sauber waren */
+  cleanBothDays: number;
+  /** alle sieben Tage in beiden Spuren sauber */
+  cleanPerfect: boolean;
   xp: number;
 }
 
@@ -80,9 +112,59 @@ export interface Stats {
   longestWalkStreak: number;
   /** Wochen, in denen sowohl Trainings- als auch Spaziergangsziel erfüllt wurden */
   doubleGoalWeeks: number;
+
+  // ——— Ernährung ———
+  lanes: Record<CleanKind, LaneStats>;
+  /** Tage, an denen beide Spuren sauber waren */
+  cleanBothDays: number;
+  /** laufende Serie an Tagen mit beiden Spuren sauber */
+  cleanBothStreak: number;
+  longestCleanBothStreak: number;
+  /** Serien von 7 vollen Tagen nach einem Ausrutscher */
+  cleanComebacks: number;
+  /** Tage, an denen mindestens eine Spur sauber war */
+  cleanAnyDays: number;
+  /** XP aus der Ernährung insgesamt */
+  cleanXp: number;
+  /** Wochen mit 7/7 in beiden Spuren */
+  cleanPerfectWeeks: number;
+  /** Wochen mit Trainingsziel, allen Spaziergängen und einer perfekten Ernährungswoche */
+  tripleGoalWeeks: number;
 }
 
-export function summarizeWeek(key: string, sessions: Session[], walks: Walk[] = []): WeekSummary {
+/** XP pro Tag einer Spur — der wievielte Tag der Serie zählt, nicht der Kalendertag. */
+function laneXpByDate(dates: Set<string>): { xp: Map<string, number>; longest: number } {
+  const xp = new Map<string, number>();
+  let longest = 0;
+  let run = 0;
+  let prev: string | null = null;
+  for (const date of [...dates].sort()) {
+    run = prev && addDays(date, -1) === prev ? run + 1 : 1;
+    if (run > longest) longest = run;
+    xp.set(date, xpForCleanDay(run));
+    prev = date;
+  }
+  return { xp, longest };
+}
+
+/** Serie rückwärts ab heute. Ein noch nicht abgehakter heutiger Tag bricht sie nicht. */
+function streakBack(dates: Set<string>, today: string): number {
+  let streak = 0;
+  let cursor = dates.has(today) ? today : addDays(today, -1);
+  while (dates.has(cursor)) {
+    streak++;
+    cursor = addDays(cursor, -1);
+  }
+  return streak;
+}
+
+export function summarizeWeek(
+  key: string,
+  sessions: Session[],
+  walks: Walk[] = [],
+  clean: CleanDay[] = [],
+  cleanXpByDate: Map<string, number> = new Map(),
+): WeekSummary {
   const count = sessions.length;
   const has = (t: SessionType) => sessions.some((s) => s.type === t);
   // Vergebend: zwei Einheiten reichen. Die Kombinationen Bouldern+Home und
@@ -92,6 +174,18 @@ export function summarizeWeek(key: string, sessions: Session[], walks: Walk[] = 
   // beim Mergen bleiben beide erhalten, gewertet wird der Tag trotzdem einmal.
   const dates = new Set(walks.map((w) => w.date));
   const walkDays = [...dates].filter(isWeekday).length;
+
+  const cleanSets: Record<CleanKind, Set<string>> = { snacks: new Set(), drinks: new Set() };
+  for (const c of clean) cleanSets[c.kind].add(c.date);
+  const cleanDays = { snacks: cleanSets.snacks.size, drinks: cleanSets.drinks.size };
+  const cleanBothDays = [...cleanSets.snacks].filter((d) => cleanSets.drinks.has(d)).length;
+
+  // Ernährungs-XP hängt an der Serie über Wochengrenzen hinweg und kommt
+  // deshalb fertig berechnet von computeStats.
+  const weekDates = new Set([...cleanSets.snacks, ...cleanSets.drinks]);
+  let cleanXp = 0;
+  for (const d of weekDates) cleanXp += cleanXpByDate.get(d) ?? 0;
+
   return {
     key,
     sessions,
@@ -101,11 +195,20 @@ export function summarizeWeek(key: string, sessions: Session[], walks: Walk[] = 
     walks,
     walkDays,
     walkPerfect: walkDays >= WALK_GOAL,
-    xp: sessions.reduce((sum, s) => sum + xpFor(s), 0) + dates.size * XP_WALK,
+    clean,
+    cleanDays,
+    cleanBothDays,
+    cleanPerfect: cleanBothDays >= CLEAN_GOAL,
+    xp: sessions.reduce((sum, s) => sum + xpFor(s), 0) + dates.size * XP_WALK + cleanXp,
   };
 }
 
-export function computeStats(sessions: Session[], walks: Walk[] = [], now = new Date()): Stats {
+export function computeStats(
+  sessions: Session[],
+  walks: Walk[] = [],
+  cleanDaysInput: CleanDay[] = [],
+  now = new Date(),
+): Stats {
   const buckets = new Map<string, Session[]>();
   for (const s of sessions) {
     const k = weekKeyOf(s.date);
@@ -122,8 +225,73 @@ export function computeStats(sessions: Session[], walks: Walk[] = [], now = new 
     else walkBuckets.set(k, [w]);
   }
 
+  const cleanBuckets = new Map<string, CleanDay[]>();
+  for (const c of cleanDaysInput) {
+    const k = weekKeyOf(c.date);
+    const arr = cleanBuckets.get(k);
+    if (arr) arr.push(c);
+    else cleanBuckets.set(k, [c]);
+  }
+
+  const today = toISODate(now);
+
+  // ——— Ernährung: erst die Serien, daraus die XP pro Tag ———
+  const laneDates: Record<CleanKind, Set<string>> = { snacks: new Set(), drinks: new Set() };
+  for (const c of cleanDaysInput) laneDates[c.kind].add(c.date);
+
+  const bothDates = [...laneDates.snacks].filter((d) => laneDates.drinks.has(d)).sort();
+  const bothSet = new Set(bothDates);
+
+  /** XP je Kalendertag über beide Spuren inkl. Kombi-Bonus — für die Wochen-XP. */
+  const cleanXpByDate = new Map<string, number>();
+  const lanes = {} as Record<CleanKind, LaneStats>;
+  let cleanXp = 0;
+
+  for (const kind of CLEAN_KINDS) {
+    const dates = laneDates[kind];
+    const { xp: byDate, longest } = laneXpByDate(dates);
+    const currentStreak = streakBack(dates, today);
+    let laneXp = 0;
+    for (const [date, value] of byDate) {
+      laneXp += value;
+      cleanXpByDate.set(date, (cleanXpByDate.get(date) ?? 0) + value);
+    }
+    cleanXp += laneXp;
+    lanes[kind] = {
+      kind,
+      dates,
+      total: dates.size,
+      currentStreak,
+      longestStreak: Math.max(longest, currentStreak),
+      // Der nächste Tag setzt die Serie fort — also ein Schritt weiter.
+      nextXp: xpForCleanDay(currentStreak + 1),
+      xp: laneXp,
+    };
+  }
+
+  for (const date of bothDates) {
+    cleanXp += XP_CLEAN_COMBO;
+    cleanXpByDate.set(date, (cleanXpByDate.get(date) ?? 0) + XP_CLEAN_COMBO);
+  }
+
+  const cleanBothStreak = streakBack(bothSet, today);
+  let longestCleanBothStreak = 0;
+  // Serien ab einer Woche zählen; ab der zweiten ist jede ein Wiedereinstieg
+  // nach einem Ausrutscher.
+  let longRuns = 0;
+  let bothRun = 0;
+  let prevBoth: string | null = null;
+  for (const date of bothDates) {
+    bothRun = prevBoth && addDays(date, -1) === prevBoth ? bothRun + 1 : 1;
+    if (bothRun > longestCleanBothStreak) longestCleanBothStreak = bothRun;
+    if (bothRun === CLEAN_GOAL) longRuns++;
+    prevBoth = date;
+  }
+  longestCleanBothStreak = Math.max(longestCleanBothStreak, cleanBothStreak);
+  const cleanComebacks = Math.max(0, longRuns - 1);
+
   const thisWeek = currentWeekKey(now);
-  const keys = [...buckets.keys(), ...walkBuckets.keys()].sort();
+  const keys = [...buckets.keys(), ...walkBuckets.keys(), ...cleanBuckets.keys()].sort();
   const first = keys[0] ?? thisWeek;
   const span = weeksBetween(first < thisWeek ? first : thisWeek, thisWeek);
 
@@ -134,6 +302,8 @@ export function computeStats(sessions: Session[], walks: Walk[] = [], now = new 
       k,
       (buckets.get(k) ?? []).slice().sort((a, b) => a.ts - b.ts),
       (walkBuckets.get(k) ?? []).slice().sort((a, b) => a.ts - b.ts),
+      (cleanBuckets.get(k) ?? []).slice().sort((a, b) => a.ts - b.ts),
+      cleanXpByDate,
     );
     weeks.set(k, w);
     orderedWeeks.push(w);
@@ -156,7 +326,7 @@ export function computeStats(sessions: Session[], walks: Walk[] = [], now = new 
   }
 
   const byType: Record<SessionType, number> = { boulder: 0, home: 0, fallback: 0 };
-  let xp = 0;
+  let xp = cleanXp;
   let earlyBird = 0;
   let nightOwl = 0;
   let weekendSessions = 0;
@@ -182,7 +352,6 @@ export function computeStats(sessions: Session[], walks: Walk[] = [], now = new 
 
   // Serie über Werktage: das Wochenende unterbricht nicht, es zählt nur nicht mit.
   // Der heutige Tag bricht die Serie nicht, solange er noch läuft.
-  const today = toISODate(now);
   let walkStreak = 0;
   let cursorDay = walkDates.has(today) && isWeekday(today) ? today : prevWeekday(today);
   while (walkDates.has(cursorDay)) {
@@ -208,10 +377,14 @@ export function computeStats(sessions: Session[], walks: Walk[] = [], now = new 
   let walkPerfectWeeks = 0;
   let walkSolidWeeks = 0;
   let doubleGoalWeeks = 0;
+  let cleanPerfectWeeks = 0;
+  let tripleGoalWeeks = 0;
   for (const w of orderedWeeks) {
     if (w.walkPerfect) walkPerfectWeeks++;
     if (w.walkDays >= 3) walkSolidWeeks++;
     if (w.fulfilled && w.walkPerfect) doubleGoalWeeks++;
+    if (w.cleanPerfect) cleanPerfectWeeks++;
+    if (w.fulfilled && w.walkPerfect && w.cleanPerfect) tripleGoalWeeks++;
     if (w.count >= 3) bigWeeks++;
     if (w.fulfilled && w.sessions.every((s) => s.intensity === 'min')) allMinWeeks++;
     const onPlan =
@@ -254,5 +427,14 @@ export function computeStats(sessions: Session[], walks: Walk[] = [], now = new 
     walkStreak,
     longestWalkStreak,
     doubleGoalWeeks,
+    lanes,
+    cleanBothDays: bothDates.length,
+    cleanBothStreak,
+    longestCleanBothStreak,
+    cleanComebacks,
+    cleanAnyDays: new Set([...laneDates.snacks, ...laneDates.drinks]).size,
+    cleanXp,
+    cleanPerfectWeeks,
+    tripleGoalWeeks,
   };
 }

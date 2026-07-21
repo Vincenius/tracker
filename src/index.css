@@ -24,6 +24,10 @@
   --color-grade-red: #c9553f;
   --color-grade-purple: #8a63b8;
 
+  /* Ernährung: Kakao für Süßes & Salziges, Minze für Getränke */
+  --color-cocoa: #b07a45;
+  --color-mint: #4fa88f;
+
   /* Signature: Tape */
   --color-tape: #e4572e;
 

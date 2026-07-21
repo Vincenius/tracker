@@ -1,8 +1,9 @@
 import { currentWeekKey, weekNumber, weekRangeLabel } from '../lib/date';
-import { summarizeWeek } from '../lib/stats';
+import { CLEAN_GOAL, summarizeWeek } from '../lib/stats';
 import type { Tracker } from '../lib/store';
 import type { SessionType } from '../lib/types';
-import { XP_PER_LEVEL } from '../lib/types';
+import { WALK_GOAL, XP_PER_LEVEL } from '../lib/types';
+import { NutritionCard } from './NutritionCard';
 import { SessionCard } from './SessionCard';
 import { WalkCard } from './WalkCard';
 
@@ -36,7 +37,7 @@ function GoalRing({ count }: { count: number }) {
 }
 
 export function WeekView({ tracker }: { tracker: Tracker }) {
-  const { stats, addSession, removeSession, toggleWalk } = tracker;
+  const { stats, addSession, removeSession, toggleWalk, toggleClean } = tracker;
   const key = currentWeekKey();
   const week = stats.weeks.get(key) ?? summarizeWeek(key, []);
   const sessions = week.sessions;
@@ -93,7 +94,48 @@ export function WeekView({ tracker }: { tracker: Tracker }) {
             Noch {stats.xpToNext} XP bis Level {stats.level + 1}.
           </p>
         </div>
+
+        {/* Die drei Wochenziele auf einen Blick — jedes zählt für sich. */}
+        <div className="mt-4 grid grid-cols-3 gap-2">
+          {[
+            { label: 'Training', done: count, goal: 2, color: 'var(--color-tape)' },
+            {
+              label: 'Spaziergänge',
+              done: week.walkDays,
+              goal: WALK_GOAL,
+              color: 'var(--color-grade-green)',
+            },
+            {
+              label: 'Sauber',
+              done: week.cleanBothDays,
+              goal: CLEAN_GOAL,
+              color: 'var(--color-mint)',
+            },
+          ].map((g) => {
+            const hit = g.done >= g.goal;
+            return (
+              <div
+                key={g.label}
+                className="rounded-xl border bg-rock-850 px-2 py-2 text-center"
+                style={{ borderColor: hit ? g.color : 'var(--color-rock-700)' }}
+              >
+                <div
+                  className="font-display text-lg leading-none tabular-nums"
+                  style={{ color: hit ? g.color : 'var(--color-chalk)' }}
+                >
+                  {Math.min(g.done, g.goal)}
+                  <span className="text-chalk-faint">/{g.goal}</span>
+                </div>
+                <div className="mt-1 text-[10px] uppercase tracking-wider text-chalk-faint">
+                  {g.label}
+                </div>
+              </div>
+            );
+          })}
+        </div>
       </section>
+
+      <NutritionCard stats={stats} toggleClean={toggleClean} />
 
       <WalkCard week={week} toggleWalk={toggleWalk} walkStreak={stats.walkStreak} />
 

@@ -3,6 +3,7 @@ import { BadgesView } from './components/BadgesView';
 import { Celebration } from './components/Celebration';
 import { HistoryView } from './components/HistoryView';
 import { HoldIcon } from './components/HoldIcon';
+import { NutritionView } from './components/NutritionView';
 import { WeekView } from './components/WeekView';
 import { useTracker, type Tracker } from './lib/store';
 
@@ -38,10 +39,12 @@ function SyncBadge({ tracker }: { tracker: Tracker }) {
   );
 }
 
+/** `short` steht in der Mobile-Leiste — vier Tabs brauchen dort kurze Wörter. */
 const TABS = [
-  { id: 'week', label: 'Diese Woche' },
-  { id: 'history', label: 'Verlauf' },
-  { id: 'badges', label: 'Abzeichen' },
+  { id: 'week', label: 'Diese Woche', short: 'Woche' },
+  { id: 'food', label: 'Ernährung', short: 'Essen' },
+  { id: 'history', label: 'Verlauf', short: 'Verlauf' },
+  { id: 'badges', label: 'Abzeichen', short: 'Abzeichen' },
 ] as const;
 
 type TabId = (typeof TABS)[number]['id'];
@@ -82,12 +85,14 @@ export default function App() {
 
       <main className="flex-1">
         {tab === 'week' && <WeekView tracker={tracker} />}
+        {tab === 'food' && <NutritionView tracker={tracker} />}
         {tab === 'history' && <HistoryView tracker={tracker} />}
         {tab === 'badges' && <BadgesView tracker={tracker} />}
       </main>
 
       <footer className="mt-8 hidden text-center text-xs text-chalk-faint sm:block">
-        Zwei Einheiten pro Woche, ein Spaziergang pro Werktag. Minimum zählt voll.
+        Zwei Einheiten pro Woche, ein Spaziergang pro Werktag, jeden Tag sauber essen. Minimum
+        zählt voll.
       </footer>
 
       {/* Mobile-Navigation */}
@@ -102,7 +107,7 @@ export default function App() {
               type="button"
               onClick={() => setTab(t.id)}
               aria-current={tab === t.id ? 'page' : undefined}
-              className={`flex-1 py-3.5 text-sm font-semibold transition ${
+              className={`flex-1 py-3.5 text-[13px] font-semibold transition ${
                 tab === t.id ? 'text-chalk' : 'text-chalk-faint'
               }`}
             >
@@ -111,7 +116,7 @@ export default function App() {
                 className="mx-auto mb-1 block h-0.5 w-8 rounded-full transition"
                 style={{ background: tab === t.id ? 'var(--color-tape)' : 'transparent' }}
               />
-              {t.label}
+              {t.short}
             </button>
           ))}
         </div>

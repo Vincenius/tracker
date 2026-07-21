@@ -26,7 +26,15 @@ const DATA_FILE = process.env.DATA_FILE ?? join(ROOT, 'data', 'tracker.json');
 const STATIC_DIR = process.env.STATIC_DIR ?? join(ROOT, 'dist');
 const TOKEN = process.env.TRACKER_TOKEN ?? '';
 
-const EMPTY = { version: 1, sessions: [], walks: [], seenBadges: [], seenLevel: 1, deleted: [] };
+const EMPTY = {
+  version: 1,
+  sessions: [],
+  walks: [],
+  cleanDays: [],
+  seenBadges: [],
+  seenLevel: 1,
+  deleted: [],
+};
 
 const COOKIE_NAME = 'tracker_token';
 const COOKIE_MAX_AGE = 60 * 60 * 24 * 365;
@@ -143,11 +151,22 @@ function sanitize(raw) {
           w && typeof w.id === 'string' && typeof w.date === 'string' && typeof w.ts === 'number',
       )
     : [];
+  const cleanDays = Array.isArray(d.cleanDays)
+    ? d.cleanDays.filter(
+        (c) =>
+          c &&
+          typeof c.id === 'string' &&
+          typeof c.date === 'string' &&
+          typeof c.ts === 'number' &&
+          ['snacks', 'drinks'].includes(c.kind),
+      )
+    : [];
   const strings = (v) => (Array.isArray(v) ? v.filter((x) => typeof x === 'string') : []);
   return {
     version: 1,
     sessions,
     walks,
+    cleanDays,
     seenBadges: strings(d.seenBadges),
     seenLevel: typeof d.seenLevel === 'number' ? d.seenLevel : 1,
     deleted: strings(d.deleted),
@@ -169,6 +188,7 @@ function merge(a, b) {
     version: 1,
     sessions: union(a.sessions, b.sessions, deleted),
     walks: union(a.walks, b.walks, deleted),
+    cleanDays: union(a.cleanDays, b.cleanDays, deleted),
     seenBadges: [...new Set([...a.seenBadges, ...b.seenBadges])],
     seenLevel: Math.max(a.seenLevel, b.seenLevel),
     deleted: [...deleted],

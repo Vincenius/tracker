@@ -43,9 +43,14 @@ const RED = 'var(--color-grade-red)';
 const PURPLE = 'var(--color-grade-purple)';
 const TAPE = 'var(--color-tape)';
 const CHALK = 'var(--color-chalk)';
+const COCOA = 'var(--color-cocoa)';
+const MINT = 'var(--color-mint)';
 
 const bestStreak = (s: Stats) => Math.max(s.currentStreak, s.longestStreak);
 const bestWalkStreak = (s: Stats) => Math.max(s.walkStreak, s.longestWalkStreak);
+const bestSnackStreak = (s: Stats) => s.lanes.snacks.longestStreak;
+const bestDrinkStreak = (s: Stats) => s.lanes.drinks.longestStreak;
+const bestBothStreak = (s: Stats) => s.longestCleanBothStreak;
 
 export const BADGES: Badge[] = [
   counter(
@@ -111,7 +116,7 @@ export const BADGES: Badge[] = [
     'Wochen',
     bestStreak,
   ),
-  counter('level-5', 'Level 5', '400 XP gesammelt.', TAPE, 400, 'XP', (s) => s.xp),
+  counter('level-5', 'Level 5', '600 XP gesammelt.', TAPE, 600, 'XP', (s) => s.xp),
 
   // ——— Kreative Meilensteine ———
   counter(
@@ -186,7 +191,7 @@ export const BADGES: Badge[] = [
     'Einheiten',
     (s) => s.total,
   ),
-  counter('level-10', 'Zehnter Grad', '900 XP gesammelt. Level 10.', TAPE, 900, 'XP', (s) => s.xp),
+  counter('level-10', 'Zehnter Grad', '1350 XP gesammelt. Level 10.', TAPE, 1350, 'XP', (s) => s.xp),
 
   // ——— Spaziergänge: Montag bis Freitag, einer pro Tag ———
   counter(
@@ -262,6 +267,89 @@ export const BADGES: Badge[] = [
     (s) => s.walkTotal,
   ),
 
+  // ——— Ernährung: jeder saubere Tag zählt, jede Serie zählt mehr ———
+  counter(
+    'clean-first',
+    'Erster sauberer Tag',
+    'Ein Tag ohne Schokolade, Chips oder Zuckergetränke ist eingetragen.',
+    COCOA,
+    1,
+    'Tag',
+    (s) => s.cleanAnyDays,
+  ),
+  counter(
+    'snack-7',
+    'Sieben ohne Süßes',
+    '7 Tage in Folge ohne Schokolade und Chips. Der Reflex ist gebrochen.',
+    COCOA,
+    7,
+    'Tage',
+    bestSnackStreak,
+  ),
+  counter(
+    'drink-7',
+    'Sieben ohne Zucker',
+    '7 Tage in Folge ohne zuckerhaltige Getränke. Wasser kann auch schmecken.',
+    MINT,
+    7,
+    'Tage',
+    bestDrinkStreak,
+  ),
+  counter(
+    'clean-week',
+    'Saubere Woche',
+    'Eine Woche mit sieben Tagen in beiden Spuren. Lückenlos.',
+    GREEN,
+    1,
+    'Woche',
+    (s) => s.cleanPerfectWeeks,
+  ),
+  counter(
+    'both-14',
+    'Zwei Wochen doppelt',
+    '14 Tage in Folge, an denen beide Spuren sauber waren.',
+    YELLOW,
+    14,
+    'Tage',
+    bestBothStreak,
+  ),
+  counter(
+    'snack-30',
+    'Ein Monat ohne Riegel',
+    '30 Tage in Folge ohne Schokolade und Chips.',
+    COCOA,
+    30,
+    'Tage',
+    bestSnackStreak,
+  ),
+  counter(
+    'drink-30',
+    'Ein Monat nur Wasser',
+    '30 Tage in Folge ohne Zuckergetränke.',
+    MINT,
+    30,
+    'Tage',
+    bestDrinkStreak,
+  ),
+  counter(
+    'clean-100',
+    'Hundert saubere Tage',
+    '100 Tage, an denen beide Spuren sauber waren.',
+    CHALK,
+    100,
+    'Tage',
+    (s) => s.cleanBothDays,
+  ),
+  counter(
+    'triple-goal',
+    'Dreifach geliefert',
+    'Eine Woche mit Trainingsziel, fünf Spaziergängen und sieben sauberen Tagen. Das volle Programm.',
+    RED,
+    1,
+    'Woche',
+    (s) => s.tripleGoalWeeks,
+  ),
+
   // ——— Überraschungen: tauchen erst auf, wenn du sie hast ———
   counter(
     'early-bird',
@@ -311,6 +399,17 @@ export const BADGES: Badge[] = [
     5,
     'Spaziergänge',
     (s) => s.weekendWalks,
+    true,
+  ),
+
+  counter(
+    'clean-comeback',
+    'Neu angesetzt',
+    'Nach einem Ausrutscher wieder 7 Tage in Folge sauber. Eine Serie zu verlieren ist kein Grund aufzuhören.',
+    MINT,
+    1,
+    'Serie',
+    (s) => s.cleanComebacks,
     true,
   ),
 

@@ -6,10 +6,15 @@
  *   POST /api/sync     -> Stand des Clients einmischen, gemergten Stand zurückgeben
  *   PUT  /api/data     -> Stand hart ersetzen (Import / Zurücksetzen)
  *
- * Optionaler Schutz: Wenn TRACKER_TOKEN gesetzt ist, muss jeder Request den
- * Header `x-tracker-token` mitschicken.
+ * Optionaler Schutz: Wenn TRACKER_TOKEN gesetzt ist, ist *alles* gesperrt —
+ * auch die App selbst, nicht nur /api/. Ein Request gilt als berechtigt, wenn
+ * er den Header `x-tracker-token`, den Cookie `tracker_token` oder `?token=…`
+ * mitbringt. Beim Treffer über `?token=…` wird der Cookie gesetzt und der
+ * Parameter aus der URL entfernt; damit muss jedes Gerät nur einmal den Link
+ * mit Token öffnen.
  */
 import { createServer } from 'node:http';
+import { timingSafeEqual } from 'node:crypto';
 import { createReadStream } from 'node:fs';
 import { mkdir, readFile, rename, stat, writeFile } from 'node:fs/promises';
 import { dirname, extname, join, normalize, resolve } from 'node:path';
@@ -22,6 +27,53 @@ const STATIC_DIR = process.env.STATIC_DIR ?? join(ROOT, 'dist');
 const TOKEN = process.env.TRACKER_TOKEN ?? '';
 
 const EMPTY = { version: 1, sessions: [], seenBadges: [], seenLevel: 1, deleted: [] };
+
+const COOKIE_NAME = 'tracker_token';
+const COOKIE_MAX_AGE = 60 * 60 * 24 * 365;
+
+const DENIED_PAGE = `<!doctype html>
+<html lang="de"><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>401 — Zugriff gesperrt</title>
+<style>
+  body{margin:0;min-height:100vh;display:grid;place-items:center;background:#111;color:#eee;
+       font:16px/1.5 system-ui,sans-serif}
+  div{text-align:center;padding:2rem}
+  h1{margin:0 0 .5rem;font-size:1.25rem}
+  p{margin:0;opacity:.6;font-size:.875rem}
+</style>
+<div><h1>Zugriff gesperrt</h1><p>Diese Seite braucht ein gültiges Token.</p></div>
+</html>`;
+
+/** Konstante Laufzeit, damit der Token nicht zeichenweise erraten werden kann. */
+function tokenMatches(value) {
+  if (typeof value !== 'string' || value.length === 0) return false;
+  const given = Buffer.from(value);
+  const want = Buffer.from(TOKEN);
+  return given.length === want.length && timingSafeEqual(given, want);
+}
+
+function cookieToken(req) {
+  for (const part of (req.headers.cookie ?? '').split(';')) {
+    const eq = part.indexOf('=');
+    if (eq < 0) continue;
+    if (part.slice(0, eq).trim() !== COOKIE_NAME) continue;
+    try {
+      return decodeURIComponent(part.slice(eq + 1).trim());
+    } catch {
+      return '';
+    }
+  }
+  return '';
+}
+
+function setCookieHeader(req) {
+  // Secure nur hinter HTTPS setzen, sonst verwirft der Browser den Cookie
+  // beim direkten Aufruf über http://<server>:3025.
+  const proto = String(req.headers['x-forwarded-proto'] ?? '').split(',')[0].trim();
+  const secure = proto === 'https' ? '; Secure' : '';
+  return `${COOKIE_NAME}=${encodeURIComponent(TOKEN)}; Path=/; Max-Age=${COOKIE_MAX_AGE}; HttpOnly; SameSite=Lax${secure}`;
+}
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -148,17 +200,43 @@ async function serveStatic(req, res, pathname) {
 
 const server = createServer(async (req, res) => {
   const url = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`);
+  const isApi = url.pathname.startsWith('/api/');
 
-  if (!url.pathname.startsWith('/api/')) {
+  if (TOKEN) {
+    const fromQuery = url.searchParams.get('token');
+    const ok =
+      tokenMatches(req.headers['x-tracker-token']) ||
+      tokenMatches(cookieToken(req)) ||
+      tokenMatches(fromQuery);
+
+    if (!ok) {
+      if (isApi) return send(res, 401, { error: 'token' });
+      res.writeHead(401, {
+        'content-type': 'text/html; charset=utf-8',
+        'cache-control': 'no-store',
+      });
+      return res.end(req.method === 'HEAD' ? undefined : DENIED_PAGE);
+    }
+
+    // Frisch per Link berechtigt: Cookie setzen und den Token aus der URL werfen,
+    // damit er nicht in History, Lesezeichen oder Referrern hängen bleibt.
+    if (fromQuery !== null && !isApi) {
+      url.searchParams.delete('token');
+      res.writeHead(302, {
+        location: `${url.pathname}${url.search}`,
+        'set-cookie': setCookieHeader(req),
+        'cache-control': 'no-store',
+      });
+      return res.end();
+    }
+  }
+
+  if (!isApi) {
     if (req.method !== 'GET' && req.method !== 'HEAD') {
       res.writeHead(405);
       return res.end();
     }
     return serveStatic(req, res, url.pathname);
-  }
-
-  if (TOKEN && req.headers['x-tracker-token'] !== TOKEN) {
-    return send(res, 401, { error: 'token' });
   }
 
   try {
@@ -184,7 +262,7 @@ server.listen(PORT, () => {
   console.log(`Daten: ${DATA_FILE}`);
   console.log(
     TOKEN
-      ? 'Zugriffsschutz: aktiv (TRACKER_TOKEN) — neue Geräte einmal mit ?token=… öffnen'
+      ? 'Zugriffsschutz: aktiv (TRACKER_TOKEN) — App und API gesperrt, neue Geräte einmal mit ?token=… öffnen'
       : 'Zugriffsschutz: aus — setze TRACKER_TOKEN in .env, wenn der Port öffentlich erreichbar ist',
   );
 });

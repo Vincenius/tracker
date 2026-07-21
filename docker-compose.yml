@@ -1,0 +1,14 @@
+services:
+  tracker:
+    build: .
+    container_name: tracker
+    ports:
+      - "3024:3024"
+    volumes:
+      # Hier liegt die einzige Datei mit deinen Daten.
+      - ./data:/data
+    environment:
+      # Kommt aus .env (siehe .env.example). Leer = kein Zugriffsschutz.
+      TRACKER_TOKEN: ${TRACKER_TOKEN:-}
+      TZ: ${TZ:-Europe/Berlin}
+    restart: unless-stopped

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Ab Android 9 ist unverschlüsseltes HTTP gesperrt. Das Backend läuft aber
+  typischerweise ohne TLS im eigenen Netz (http://<host>:3025), deshalb wird
+  Klartext hier erlaubt. Läuft der Server hinter HTTPS, kann dieser Block weg —
+  dann reicht die INTERNET-Berechtigung.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system"/>
+        </trust-anchors>
+    </base-config>
+</network-security-config>

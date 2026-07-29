@@ -5,6 +5,11 @@ pro Woche**, **ein Spaziergang an jedem Werktag** und **jeden Tag sauber essen**
 Kein Login, kein Setup. Dahinter läuft ein winziges Backend, das alles in **einer
 JSON-Datei** speichert — damit Handy und Desktop denselben Stand sehen.
 
+Neben dieser Web-App gibt es eine native Variante mit Flutter in
+[`../app`](../app), die dasselbe Backend nutzt. Wird die Logik hier geändert,
+muss sie dort mitgezogen werden — die Zuordnung der Dateien steht im
+[Haupt-README](../README.md).
+
 ## Die Routine
 
 | Einheit | Tag | XP |
@@ -166,6 +171,10 @@ und schützt stattdessen über VPN oder Reverse Proxy.
 
 Nach einem Tokenwechsel muss die App einmal neu über den `?token=`-Link geöffnet
 (bzw. neu installiert) werden.
+
+Wer lieber eine echte native App möchte: [`../app`](../app) baut dieselbe
+Oberfläche mit Flutter für iOS, Android und macOS — ohne Token, solange
+`TRACKER_TOKEN` leer bleibt.
 
 Die Icons liegen in `public/` und werden aus dem Griff-Motiv generiert:
 

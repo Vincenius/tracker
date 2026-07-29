@@ -9,12 +9,14 @@ import {
   weekKeyOf,
   weeksBetween,
 } from './date';
-import type { CleanDay, CleanKind, Session, SessionType, Walk } from './types';
+import { pauseInfo } from './pause';
+import type { CleanDay, CleanKind, PauseEvent, Session, SessionType, Stair, Walk } from './types';
 import {
   CLEAN_KINDS,
   WALK_GOAL,
   XP_CLEAN_COMBO,
   XP_PER_LEVEL,
+  XP_STAIR,
   XP_WALK,
   xpFor,
   xpForCleanDay,
@@ -63,6 +65,9 @@ export interface WeekSummary {
   cleanBothDays: number;
   /** alle sieben Tage in beiden Spuren sauber */
   cleanPerfect: boolean;
+  stairs: Stair[];
+  /** Treppenaufstiege in dieser Woche — jeder einzelne zählt */
+  stairCount: number;
   xp: number;
 }
 
@@ -130,16 +135,52 @@ export interface Stats {
   cleanPerfectWeeks: number;
   /** Wochen mit Trainingsziel, allen Spaziergängen und einer perfekten Ernährungswoche */
   tripleGoalWeeks: number;
+
+  // ——— Treppe ———
+  /** Treppenaufstiege insgesamt */
+  stairTotal: number;
+  /** Aufstiege heute */
+  stairToday: number;
+  /** Tage mit mindestens einem Aufstieg */
+  stairDays: number;
+  /** meiste Aufstiege an einem Tag */
+  stairBestDay: number;
+  /** laufende Serie an Tagen mit mindestens einem Aufstieg */
+  stairStreak: number;
+  longestStairStreak: number;
+
+  // ——— Pausenmodus ———
+  /** Pause läuft: Streaks frieren ein, Einträge zählen trotzdem */
+  pauseActive: boolean;
+  /** Startdatum der laufenden Pause — null, wenn keine läuft */
+  pausedSince: string | null;
+}
+
+/**
+ * Folgt `date` lückenlos auf `prev`? Pausierte Tage dazwischen zählen nicht
+ * als Lücke — eine Serie überlebt den Urlaub.
+ */
+function joins(prev: string | null, date: string, paused: Set<string>): boolean {
+  if (!prev) return false;
+  let d = addDays(prev, 1);
+  while (d < date) {
+    if (!paused.has(d)) return false;
+    d = addDays(d, 1);
+  }
+  return d === date;
 }
 
 /** XP pro Tag einer Spur — der wievielte Tag der Serie zählt, nicht der Kalendertag. */
-function laneXpByDate(dates: Set<string>): { xp: Map<string, number>; longest: number } {
+function laneXpByDate(
+  dates: Set<string>,
+  paused: Set<string>,
+): { xp: Map<string, number>; longest: number } {
   const xp = new Map<string, number>();
   let longest = 0;
   let run = 0;
   let prev: string | null = null;
   for (const date of [...dates].sort()) {
-    run = prev && addDays(date, -1) === prev ? run + 1 : 1;
+    run = joins(prev, date, paused) ? run + 1 : 1;
     if (run > longest) longest = run;
     xp.set(date, xpForCleanDay(run));
     prev = date;
@@ -147,12 +188,16 @@ function laneXpByDate(dates: Set<string>): { xp: Map<string, number>; longest: n
   return { xp, longest };
 }
 
-/** Serie rückwärts ab heute. Ein noch nicht abgehakter heutiger Tag bricht sie nicht. */
-function streakBack(dates: Set<string>, today: string): number {
+/**
+ * Serie rückwärts ab heute. Ein noch nicht abgehakter heutiger Tag bricht sie
+ * nicht — und pausierte Tage ohne Eintrag werden übersprungen.
+ */
+function streakBack(dates: Set<string>, today: string, paused: Set<string>): number {
   let streak = 0;
   let cursor = dates.has(today) ? today : addDays(today, -1);
-  while (dates.has(cursor)) {
-    streak++;
+  for (;;) {
+    if (dates.has(cursor)) streak++;
+    else if (!paused.has(cursor)) break;
     cursor = addDays(cursor, -1);
   }
   return streak;
@@ -164,6 +209,7 @@ export function summarizeWeek(
   walks: Walk[] = [],
   clean: CleanDay[] = [],
   cleanXpByDate: Map<string, number> = new Map(),
+  stairs: Stair[] = [],
 ): WeekSummary {
   const count = sessions.length;
   const has = (t: SessionType) => sessions.some((s) => s.type === t);
@@ -199,7 +245,13 @@ export function summarizeWeek(
     cleanDays,
     cleanBothDays,
     cleanPerfect: cleanBothDays >= CLEAN_GOAL,
-    xp: sessions.reduce((sum, s) => sum + xpFor(s), 0) + dates.size * XP_WALK + cleanXp,
+    stairs,
+    stairCount: stairs.length,
+    xp:
+      sessions.reduce((sum, s) => sum + xpFor(s), 0) +
+      dates.size * XP_WALK +
+      stairs.length * XP_STAIR +
+      cleanXp,
   };
 }
 
@@ -207,6 +259,8 @@ export function computeStats(
   sessions: Session[],
   walks: Walk[] = [],
   cleanDaysInput: CleanDay[] = [],
+  stairs: Stair[] = [],
+  pauseEvents: PauseEvent[] = [],
   now = new Date(),
 ): Stats {
   const buckets = new Map<string, Session[]>();
@@ -233,7 +287,21 @@ export function computeStats(
     else cleanBuckets.set(k, [c]);
   }
 
+  const stairBuckets = new Map<string, Stair[]>();
+  for (const s of stairs) {
+    const k = weekKeyOf(s.date);
+    const arr = stairBuckets.get(k);
+    if (arr) arr.push(s);
+    else stairBuckets.set(k, [s]);
+  }
+
   const today = toISODate(now);
+
+  // ——— Pausenmodus: diese Tage brechen keine Serie ———
+  const { paused, activeSince } = pauseInfo(pauseEvents, today);
+  /** Eine Woche mit mindestens einem Pausentag bricht den Wochen-Streak nicht. */
+  const weekPaused = (key: string) =>
+    [0, 1, 2, 3, 4, 5, 6].some((i) => paused.has(addDays(key, i)));
 
   // ——— Ernährung: erst die Serien, daraus die XP pro Tag ———
   const laneDates: Record<CleanKind, Set<string>> = { snacks: new Set(), drinks: new Set() };
@@ -249,8 +317,8 @@ export function computeStats(
 
   for (const kind of CLEAN_KINDS) {
     const dates = laneDates[kind];
-    const { xp: byDate, longest } = laneXpByDate(dates);
-    const currentStreak = streakBack(dates, today);
+    const { xp: byDate, longest } = laneXpByDate(dates, paused);
+    const currentStreak = streakBack(dates, today, paused);
     let laneXp = 0;
     for (const [date, value] of byDate) {
       laneXp += value;
@@ -274,7 +342,7 @@ export function computeStats(
     cleanXpByDate.set(date, (cleanXpByDate.get(date) ?? 0) + XP_CLEAN_COMBO);
   }
 
-  const cleanBothStreak = streakBack(bothSet, today);
+  const cleanBothStreak = streakBack(bothSet, today, paused);
   let longestCleanBothStreak = 0;
   // Serien ab einer Woche zählen; ab der zweiten ist jede ein Wiedereinstieg
   // nach einem Ausrutscher.
@@ -282,7 +350,7 @@ export function computeStats(
   let bothRun = 0;
   let prevBoth: string | null = null;
   for (const date of bothDates) {
-    bothRun = prevBoth && addDays(date, -1) === prevBoth ? bothRun + 1 : 1;
+    bothRun = joins(prevBoth, date, paused) ? bothRun + 1 : 1;
     if (bothRun > longestCleanBothStreak) longestCleanBothStreak = bothRun;
     if (bothRun === CLEAN_GOAL) longRuns++;
     prevBoth = date;
@@ -291,7 +359,12 @@ export function computeStats(
   const cleanComebacks = Math.max(0, longRuns - 1);
 
   const thisWeek = currentWeekKey(now);
-  const keys = [...buckets.keys(), ...walkBuckets.keys(), ...cleanBuckets.keys()].sort();
+  const keys = [
+    ...buckets.keys(),
+    ...walkBuckets.keys(),
+    ...cleanBuckets.keys(),
+    ...stairBuckets.keys(),
+  ].sort();
   const first = keys[0] ?? thisWeek;
   const span = weeksBetween(first < thisWeek ? first : thisWeek, thisWeek);
 
@@ -304,24 +377,27 @@ export function computeStats(
       (walkBuckets.get(k) ?? []).slice().sort((a, b) => a.ts - b.ts),
       (cleanBuckets.get(k) ?? []).slice().sort((a, b) => a.ts - b.ts),
       cleanXpByDate,
+      (stairBuckets.get(k) ?? []).slice().sort((a, b) => a.ts - b.ts),
     );
     weeks.set(k, w);
     orderedWeeks.push(w);
   }
 
   // Aktueller Streak: die laufende Woche zählt nur, wenn sie schon erfüllt ist –
-  // sie bricht den Streak aber niemals, solange sie noch läuft.
+  // sie bricht den Streak aber niemals, solange sie noch läuft. Pausierte
+  // Wochen werden übersprungen statt gewertet.
   let currentStreak = 0;
   let cursor = weeks.get(thisWeek)?.fulfilled ? thisWeek : addWeeks(thisWeek, -1);
-  while (weeks.get(cursor)?.fulfilled) {
-    currentStreak++;
+  for (;;) {
+    if (weeks.get(cursor)?.fulfilled) currentStreak++;
+    else if (!weekPaused(cursor)) break;
     cursor = addWeeks(cursor, -1);
   }
 
   let longestStreak = 0;
   let run = 0;
   for (const w of orderedWeeks) {
-    run = w.fulfilled ? run + 1 : 0;
+    run = w.fulfilled ? run + 1 : weekPaused(w.key) ? run : 0;
     if (run > longestStreak) longestStreak = run;
   }
 
@@ -350,24 +426,50 @@ export function computeStats(
   const weekdayWalks = [...walkDates].filter(isWeekday);
   const weekendWalks = walkDates.size - weekdayWalks.length;
 
-  // Serie über Werktage: das Wochenende unterbricht nicht, es zählt nur nicht mit.
-  // Der heutige Tag bricht die Serie nicht, solange er noch läuft.
+  // Serie über Werktage: das Wochenende unterbricht nicht, es zählt nur nicht
+  // mit — pausierte Werktage genauso. Der heutige Tag bricht die Serie nicht,
+  // solange er noch läuft.
   let walkStreak = 0;
   let cursorDay = walkDates.has(today) && isWeekday(today) ? today : prevWeekday(today);
-  while (walkDates.has(cursorDay)) {
-    walkStreak++;
+  for (;;) {
+    if (walkDates.has(cursorDay)) walkStreak++;
+    else if (!paused.has(cursorDay)) break;
     cursorDay = prevWeekday(cursorDay);
   }
+
+  /** Vorheriger Werktag, pausierte Tage ohne Spaziergang überspringen. */
+  const prevWalkDay = (d: string) => {
+    let x = prevWeekday(d);
+    while (paused.has(x) && !walkDates.has(x)) x = prevWeekday(x);
+    return x;
+  };
 
   let longestWalkStreak = 0;
   const sortedWeekdays = weekdayWalks.slice().sort();
   let walkRun = 0;
   let prevDay: string | null = null;
   for (const day of sortedWeekdays) {
-    walkRun = prevDay && prevWeekday(day) === prevDay ? walkRun + 1 : 1;
+    walkRun = prevDay && prevWalkDay(day) === prevDay ? walkRun + 1 : 1;
     if (walkRun > longestWalkStreak) longestWalkStreak = walkRun;
     prevDay = day;
   }
+
+  // ——— Treppe: jeder Aufstieg zählt, Serien laufen über Kalendertage ———
+  const stairPerDay = new Map<string, number>();
+  for (const s of stairs) stairPerDay.set(s.date, (stairPerDay.get(s.date) ?? 0) + 1);
+  const stairDates = new Set(stairPerDay.keys());
+  xp += stairs.length * XP_STAIR;
+
+  const stairStreak = streakBack(stairDates, today, paused);
+  let longestStairStreak = 0;
+  let stairRun = 0;
+  let prevStairDay: string | null = null;
+  for (const day of [...stairDates].sort()) {
+    stairRun = joins(prevStairDay, day, paused) ? stairRun + 1 : 1;
+    if (stairRun > longestStairStreak) longestStairStreak = stairRun;
+    prevStairDay = day;
+  }
+  longestStairStreak = Math.max(longestStairStreak, stairStreak);
 
   let bigWeeks = 0;
   let onPlanWeeks = 0;
@@ -436,5 +538,13 @@ export function computeStats(
     cleanXp,
     cleanPerfectWeeks,
     tripleGoalWeeks,
+    stairTotal: stairs.length,
+    stairToday: stairPerDay.get(today) ?? 0,
+    stairDays: stairDates.size,
+    stairBestDay: Math.max(0, ...stairPerDay.values()),
+    stairStreak,
+    longestStairStreak,
+    pauseActive: activeSince !== null,
+    pausedSince: activeSince,
   };
 }

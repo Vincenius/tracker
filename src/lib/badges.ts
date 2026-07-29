@@ -267,6 +267,53 @@ export const BADGES: Badge[] = [
     (s) => s.walkTotal,
   ),
 
+  // ——— Treppe: jeder Aufstieg zählt, so oft du willst ———
+  counter(
+    'stair-first',
+    'Erste Stufen',
+    'Einmal die Treppe statt des Aufzugs genommen. Der Anfang ist gemacht.',
+    YELLOW,
+    1,
+    'Aufstieg',
+    (s) => s.stairTotal,
+  ),
+  counter(
+    'stair-day-5',
+    'Treppenhaus-Tag',
+    '5 Aufstiege an einem einzigen Tag.',
+    TAPE,
+    5,
+    'Aufstiege',
+    (s) => s.stairBestDay,
+  ),
+  counter(
+    'stair-50',
+    'Etagenwechsel',
+    '50 Aufstiege insgesamt. Der Aufzug wird langsam nervös.',
+    BLUE,
+    50,
+    'Aufstiege',
+    (s) => s.stairTotal,
+  ),
+  counter(
+    'stair-streak-7',
+    'Woche im Treppenhaus',
+    '7 Tage in Folge mindestens einmal die Treppe genommen.',
+    GREEN,
+    7,
+    'Tage',
+    (s) => s.longestStairStreak,
+  ),
+  counter(
+    'stair-250',
+    'Hochhaus',
+    '250 Aufstiege insgesamt. Der Aufzug kennt dich nicht mehr.',
+    CHALK,
+    250,
+    'Aufstiege',
+    (s) => s.stairTotal,
+  ),
+
   // ——— Ernährung: jeder saubere Tag zählt, jede Serie zählt mehr ———
   counter(
     'clean-first',
@@ -399,6 +446,17 @@ export const BADGES: Badge[] = [
     5,
     'Spaziergänge',
     (s) => s.weekendWalks,
+    true,
+  ),
+
+  counter(
+    'stair-day-10',
+    'Wolkenkratzer',
+    '10 Aufstiege an einem Tag. Wo willst du eigentlich hin?',
+    RED,
+    10,
+    'Aufstiege',
+    (s) => s.stairBestDay,
     true,
   ),
 

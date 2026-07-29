@@ -1,10 +1,11 @@
-import { currentWeekKey, weekNumber, weekRangeLabel } from '../lib/date';
+import { currentWeekKey, shortDate, weekNumber, weekRangeLabel } from '../lib/date';
 import { CLEAN_GOAL, summarizeWeek } from '../lib/stats';
 import type { Tracker } from '../lib/store';
 import type { SessionType } from '../lib/types';
 import { WALK_GOAL, XP_PER_LEVEL } from '../lib/types';
 import { NutritionCard } from './NutritionCard';
 import { SessionCard } from './SessionCard';
+import { StairCard } from './StairCard';
 import { WalkCard } from './WalkCard';
 
 function GoalRing({ count }: { count: number }) {
@@ -37,7 +38,16 @@ function GoalRing({ count }: { count: number }) {
 }
 
 export function WeekView({ tracker }: { tracker: Tracker }) {
-  const { stats, addSession, removeSession, toggleWalk, toggleClean } = tracker;
+  const {
+    stats,
+    addSession,
+    removeSession,
+    toggleWalk,
+    toggleClean,
+    addStair,
+    removeStair,
+    togglePause,
+  } = tracker;
   const key = currentWeekKey();
   const week = stats.weeks.get(key) ?? summarizeWeek(key, []);
   const sessions = week.sessions;
@@ -58,6 +68,34 @@ export function WeekView({ tracker }: { tracker: Tracker }) {
 
   return (
     <div className="space-y-4">
+      {stats.pauseActive && (
+        <section
+          className="chalk-edge rounded-2xl border bg-rock-900/80 p-4"
+          style={{ borderColor: 'var(--color-grade-yellow)' }}
+        >
+          <div className="flex items-center gap-3">
+            <span className="shrink-0 text-2xl leading-none" aria-hidden="true">
+              ⏸️
+            </span>
+            <div className="min-w-0 flex-1">
+              <h2 className="font-display text-lg uppercase leading-tight">Pausenmodus aktiv</h2>
+              <p className="mt-0.5 text-sm text-chalk-dim">
+                {stats.pausedSince ? `Seit ${shortDate(stats.pausedSince)}. ` : ''}
+                Deine Streaks sind eingefroren — was du trotzdem einträgst, zählt ganz normal.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={togglePause}
+              className="shrink-0 rounded-lg px-3 py-2 text-sm font-semibold text-rock-950 transition hover:brightness-110"
+              style={{ background: 'var(--color-grade-yellow)' }}
+            >
+              Beenden
+            </button>
+          </div>
+        </section>
+      )}
+
       <section className="chalk-edge chalk-dust rounded-2xl border border-rock-700 bg-rock-900/80 p-4">
         <div className="flex items-center gap-4">
           <GoalRing count={count} />
@@ -139,6 +177,14 @@ export function WeekView({ tracker }: { tracker: Tracker }) {
 
       <WalkCard week={week} toggleWalk={toggleWalk} walkStreak={stats.walkStreak} />
 
+      <StairCard
+        week={week}
+        stairToday={stats.stairToday}
+        stairStreak={stats.stairStreak}
+        addStair={addStair}
+        removeStair={removeStair}
+      />
+
       <SessionCard
         type="home"
         done={sessions.filter((s) => s.type === 'home')}
@@ -169,6 +215,16 @@ export function WeekView({ tracker }: { tracker: Tracker }) {
             onRemove={removeSession}
           />
         </>
+      )}
+
+      {!stats.pauseActive && (
+        <button
+          type="button"
+          onClick={togglePause}
+          className="w-full rounded-2xl border border-dashed border-rock-700 px-4 py-3 text-sm text-chalk-faint transition hover:border-rock-500 hover:text-chalk-dim"
+        >
+          🏖️ Urlaub oder krank? Pausenmodus starten — deine Streaks bleiben erhalten.
+        </button>
       )}
     </div>
   );

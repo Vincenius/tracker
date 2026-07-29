@@ -166,6 +166,19 @@ export function HistoryView({ tracker }: { tracker: Tracker }) {
       </section>
 
       <section className="chalk-edge rounded-2xl border border-rock-700 bg-rock-900/80 p-4">
+        <h2 className="font-display text-xl uppercase">Treppe</h2>
+        <p className="mt-1 text-sm text-chalk-dim">
+          Jeder Aufstieg zählt — so oft am Tag, wie du magst.
+        </p>
+        <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <Stat value={stats.stairTotal} label="Aufstiege" />
+          <Stat value={stats.stairDays} label="Tage mit Treppe" />
+          <Stat value={stats.stairBestDay} label="Tagesrekord" />
+          <Stat value={stats.longestStairStreak} label="Längster Streak" />
+        </div>
+      </section>
+
+      <section className="chalk-edge rounded-2xl border border-rock-700 bg-rock-900/80 p-4">
         <h2 className="font-display text-xl uppercase">Ernährung</h2>
         <p className="mt-1 text-sm text-chalk-dim">
           Zwei Zeilen pro Woche: oben Schokolade & Chips, unten Zuckergetränke.

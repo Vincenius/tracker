@@ -38,11 +38,37 @@ export interface CleanDay {
   ts: number;
 }
 
+/**
+ * Einmal die Treppe statt des Aufzugs genommen. Anders als beim Spaziergang
+ * zählt jeder Eintrag — beliebig oft am Tag.
+ */
+export interface Stair {
+  id: string;
+  /** ISO-Datum, z.B. 2026-07-20 */
+  date: string;
+  ts: number;
+}
+
+/**
+ * Pausenmodus als Ereignis-Paar: 'start' öffnet eine Pause, 'stop' schließt
+ * sie. Ereignisse sind unveränderlich mit eigener ID — der Sync merged sie wie
+ * alles andere per Vereinigung, der Zustand ergibt sich aus der Reihenfolge.
+ */
+export interface PauseEvent {
+  id: string;
+  /** ISO-Datum, z.B. 2026-07-20 */
+  date: string;
+  ts: number;
+  action: 'start' | 'stop';
+}
+
 export interface AppData {
   version: 1;
   sessions: Session[];
   walks: Walk[];
   cleanDays: CleanDay[];
+  stairs: Stair[];
+  pauses: PauseEvent[];
   /** Bereits gefeierte Badges – verhindert doppelte Animationen */
   seenBadges: string[];
   /** Bereits erreichtes Level – für die Level-Up-Animation */
@@ -53,6 +79,9 @@ export interface AppData {
 
 /** Ein Spaziergang ist klein — er zählt trotzdem. */
 export const XP_WALK = 6;
+
+/** Ein Treppenaufstieg ist noch kleiner — dafür ist er unbegrenzt. */
+export const XP_STAIR = 2;
 
 /** Zielanzahl Spaziergänge pro Woche: Montag bis Freitag. */
 export const WALK_GOAL = 5;

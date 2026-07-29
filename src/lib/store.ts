@@ -3,12 +3,23 @@ import { initToken, replaceOnServer, syncWithServer } from './api';
 import { BADGES, unlockedBadges, type Badge } from './badges';
 import { toISODate } from './date';
 import { mergeData, sameData } from './merge';
+import { isPauseActive } from './pause';
 import { computeStats } from './stats';
 import { exportFile, importFile, loadData, saveData, emptyData } from './storage';
-import type { AppData, CleanDay, CleanKind, Intensity, Session, SessionType, Walk } from './types';
+import type {
+  AppData,
+  CleanDay,
+  CleanKind,
+  Intensity,
+  PauseEvent,
+  Session,
+  SessionType,
+  Stair,
+  Walk,
+} from './types';
 
 /** Was `commitEarned` an Fortschritt entgegennimmt. */
-type Progress = Pick<AppData, 'sessions' | 'walks' | 'cleanDays'>;
+type Progress = Pick<AppData, 'sessions' | 'walks' | 'cleanDays' | 'stairs'>;
 
 export interface Celebration {
   level?: number;
@@ -26,7 +37,7 @@ function newId(): string {
 
 /** Beim Laden/Mergen gelten alle erfüllten Badges/Level als gesehen – keine Nachfeier. */
 function normalizeSeen(data: AppData): AppData {
-  const stats = computeStats(data.sessions, data.walks, data.cleanDays);
+  const stats = computeStats(data.sessions, data.walks, data.cleanDays, data.stairs, data.pauses);
   return { ...data, seenBadges: unlockedBadges(stats), seenLevel: stats.level };
 }
 
@@ -41,8 +52,8 @@ export function useTracker() {
   latest.current = data;
 
   const stats = useMemo(
-    () => computeStats(data.sessions, data.walks, data.cleanDays),
-    [data.sessions, data.walks, data.cleanDays],
+    () => computeStats(data.sessions, data.walks, data.cleanDays, data.stairs, data.pauses),
+    [data.sessions, data.walks, data.cleanDays, data.stairs, data.pauses],
   );
 
   const flash = useCallback((msg: string) => {
@@ -106,8 +117,15 @@ export function useTracker() {
         sessions: patch.sessions ?? prev.sessions,
         walks: patch.walks ?? prev.walks,
         cleanDays: patch.cleanDays ?? prev.cleanDays,
+        stairs: patch.stairs ?? prev.stairs,
       };
-      const nextStats = computeStats(next.sessions, next.walks, next.cleanDays);
+      const nextStats = computeStats(
+        next.sessions,
+        next.walks,
+        next.cleanDays,
+        next.stairs,
+        prev.pauses,
+      );
       const unlocked = unlockedBadges(nextStats);
       const fresh = unlocked.filter((id) => !prev.seenBadges.includes(id));
       const leveledUp = nextStats.level > prev.seenLevel;
@@ -136,12 +154,14 @@ export function useTracker() {
         sessions: patch.sessions ?? prev.sessions,
         walks: patch.walks ?? prev.walks,
         cleanDays: patch.cleanDays ?? prev.cleanDays,
+        stairs: patch.stairs ?? prev.stairs,
       };
       commit({
         ...prev,
         ...next,
         deleted: [...new Set([...prev.deleted, ...ids])],
-        seenLevel: computeStats(next.sessions, next.walks, next.cleanDays).level,
+        seenLevel: computeStats(next.sessions, next.walks, next.cleanDays, next.stairs, prev.pauses)
+          .level,
       });
       schedulePush();
       flash(msg);
@@ -232,6 +252,46 @@ export function useTracker() {
     [commitEarned, commitRemoved],
   );
 
+  /** Treppe genommen — zählt sofort, beliebig oft am Tag. */
+  const addStair = useCallback(() => {
+    const prev = latest.current;
+    const stair: Stair = { id: newId(), date: toISODate(new Date()), ts: Date.now() };
+    commitEarned(prev, { stairs: [...prev.stairs, stair] });
+  }, [commitEarned]);
+
+  /** Den jüngsten heutigen Aufstieg zurücknehmen — für den Fall eines Fehlklicks. */
+  const removeStair = useCallback(() => {
+    const prev = latest.current;
+    const today = toISODate(new Date());
+    const todays = prev.stairs.filter((s) => s.date === today);
+    const last = todays[todays.length - 1];
+    if (!last) return;
+    commitRemoved(
+      prev,
+      { stairs: prev.stairs.filter((s) => s.id !== last.id) },
+      [last.id],
+      'Aufstieg zurückgenommen.',
+    );
+  }, [commitRemoved]);
+
+  /**
+   * Pausenmodus an- oder abschalten. Kein `commitEarned`: eine Pause schaltet
+   * nichts frei, sie friert nur die Streaks ein.
+   */
+  const togglePause = useCallback(() => {
+    const prev = latest.current;
+    const active = isPauseActive(prev.pauses);
+    const event: PauseEvent = {
+      id: newId(),
+      date: toISODate(new Date()),
+      ts: Date.now(),
+      action: active ? 'stop' : 'start',
+    };
+    commit({ ...prev, pauses: [...prev.pauses, event] });
+    schedulePush();
+    flash(active ? 'Pause beendet — weiter geht’s!' : 'Pausenmodus aktiv. Deine Streaks sind sicher.');
+  }, [commit, flash, schedulePush]);
+
   /** Import & Zurücksetzen ersetzen den Server-Stand, statt ihn zu mergen. */
   const replaceEverywhere = useCallback(
     async (next: AppData, msg: string) => {
@@ -284,6 +344,9 @@ export function useTracker() {
     removeSession,
     toggleWalk,
     toggleClean,
+    addStair,
+    removeStair,
+    togglePause,
     resetAll,
     doExport,
     doImport,

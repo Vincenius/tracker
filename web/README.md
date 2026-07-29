@@ -122,9 +122,11 @@ ohne dass etwas verloren geht.
 ### Zugriffsschutz per Token (optional)
 
 Der Token kommt aus der Umgebungsvariable **`TRACKER_TOKEN`** — lokal wie im
-Container aus einer `.env`-Datei, die nicht eingecheckt wird:
+Container aus einer `.env`-Datei, die nicht eingecheckt wird. Sie liegt neben der
+`docker-compose.yml` im Repo-Root, also **eine Ebene über diesem Ordner**:
 
 ```bash
+cd ..                         # ins Repo-Root
 cp .env.example .env
 echo "TRACKER_TOKEN=$(openssl rand -hex 16)" >> .env
 docker compose up -d          # compose liest .env automatisch
@@ -186,7 +188,7 @@ npm run icons        # nur nötig, wenn du Form oder Farben änderst
 
 ```bash
 npm install
-cp .env.example .env  # optional, für TRACKER_TOKEN & Co.
+cp ../.env.example ../.env  # optional, für TRACKER_TOKEN & Co.
 npm run dev:all  # Backend (:3025) + Vite-Dev-Server -> http://localhost:3025
 npm run dev      # nur Frontend (läuft dann rein lokal/offline)
 npm run build    # Produktions-Build nach dist/
@@ -194,8 +196,9 @@ npm run start    # Backend liefert dist/ aus -> http://localhost:3025
 ```
 
 Vite proxyt `/api` im Dev-Modus auf `localhost:3025`. Die Daten landen dabei in
-`data/tracker.json`, die Konfiguration liest Node per `--env-file-if-exists=.env`
-— beides ist per `.gitignore` ausgenommen.
+`../data/tracker.json`, die Konfiguration liest Node per
+`--env-file-if-exists=../.env` — beides liegt im Repo-Root, damit Dev und
+Container denselben Pfad benutzen, und ist per `.gitignore` ausgenommen.
 
 Stack: Vite + React + TypeScript + Tailwind v4, Backend Node ohne Dependencies.
 Schriften (Anton, Inter) werden über `@fontsource` mitgebündelt — die App braucht
@@ -203,17 +206,21 @@ zur Laufzeit kein externes Netz.
 
 ## Deploy auf dem Server (Port 3025)
 
+Die `docker-compose.yml` liegt im **Repo-Root** (nicht in diesem Ordner) und
+baut aus `./web` — dadurch zeigen `./data` und `.env` weiterhin dorthin, wo sie
+seit jeher liegen:
+
 ```bash
 git clone <repo> tracker && cd tracker
-docker compose up -d --build
+docker compose up -d --build   # kein `cd web`
 ```
 
 Danach läuft die App auf `http://<server>:3025`. Das Image ist ein zweistufiger
 Build: Node baut das Frontend, das schlanke Runtime-Image startet nur noch
 `server/index.js` (als User `node`, ohne Dependencies).
 
-Die Daten liegen auf dem Host in `./data/tracker.json` — das ist das Volume aus
-der `docker-compose.yml` und überlebt jedes Rebuild.
+Die Daten liegen auf dem Host in `./data/tracker.json` (im Repo-Root) — das ist
+das Volume aus der `docker-compose.yml` und überlebt jedes Rebuild.
 
 Updates:
 

@@ -1,6 +1,12 @@
+# Compose leitet den Projektnamen sonst vom Verzeichnis ab. Fest gesetzt, damit
+# Netz und Container auch nach einem Umbenennen des Checkouts dieselben bleiben.
+name: tracker
+
 services:
   tracker:
-    build: .
+    # Die Web-App samt Backend liegt in web/, die Datei bleibt im Root: so
+    # zeigen `./data` und `.env` weiterhin dorthin, wo sie auf dem Server liegen.
+    build: ./web
     container_name: tracker
     ports:
       - "3025:3025"

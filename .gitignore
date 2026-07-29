@@ -1,2 +1,7 @@
 .DS_Store
 *.log
+
+# Die einzige Datei mit den Daten — liegt neben der docker-compose.yml, weil
+# der Bind-Mount `./data:/data` von hier aus aufgelöst wird.
+data/
+.env

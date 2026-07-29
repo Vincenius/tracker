@@ -4,10 +4,17 @@ Eine selbst gehostete Sportroutine — **zwei Einheiten pro Woche**, **ein
 Spaziergang an jedem Werktag**, **Treppe statt Aufzug** und **jeden Tag sauber
 essen**. Zwei Frontends, ein Backend, eine JSON-Datei.
 
-| Ordner | Was drin ist |
+| Ordner / Datei | Was drin ist |
 | --- | --- |
 | [`web/`](web) | React-PWA **und** das Backend (Node, ohne Dependencies). Siehe [`web/README.md`](web/README.md). |
 | [`app/`](app) | Native App mit Flutter (iOS, Android, macOS). Siehe [`app/README.md`](app/README.md). |
+| [`docker-compose.yml`](docker-compose.yml) | Deploy des Backends. Baut aus `./web`, läuft aber **von hier** — `./data` und `.env` liegen daneben. |
+| `data/` | Die einzige Datei mit deinen Daten (`data/tracker.json`). Nicht eingecheckt. |
+| `.env` | `TRACKER_TOKEN` & Co., aus [`.env.example`](.env.example). Nicht eingecheckt. |
+
+> Compose immer aus dem Repo-Root starten, **nicht** aus `web/`. Sonst nennt
+> Compose das Projekt nach dem Verzeichnis, und der Bind-Mount `./data` zeigt
+> ins Leere statt auf die vorhandenen Daten.
 
 Das Backend in `web/server/index.js` ist die einzige Quelle der Wahrheit. Die
 Web-App liefert es gleich mit aus, die native App spricht dieselbe API an:
@@ -40,7 +47,10 @@ an der Logik dort `flutter test` laufen lassen.
 ## Schnellstart
 
 ```bash
-# Backend + Web
+# Deploy (Repo-Root)
+docker compose up -d --build                  # http://<server>:3025
+
+# Entwicklung: Backend + Web
 cd web && npm install && npm run dev:all      # http://localhost:3025
 
 # Native App gegen dasselbe Backend

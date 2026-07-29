@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { initToken, replaceOnServer, syncWithServer } from './api';
+import { initToken, replaceOnServer, setToken, syncWithServer, UnauthorizedError } from './api';
 import { BADGES, unlockedBadges, type Badge } from './badges';
 import { toISODate } from './date';
 import { mergeData, sameData } from './merge';
@@ -26,7 +26,7 @@ export interface Celebration {
   badges: Badge[];
 }
 
-export type SyncState = 'idle' | 'syncing' | 'synced' | 'offline';
+export type SyncState = 'idle' | 'syncing' | 'synced' | 'offline' | 'unauthorized';
 
 const PUSH_DELAY = 600;
 const POLL_INTERVAL = 60_000;
@@ -79,11 +79,20 @@ export function useTracker() {
       else saveData(merged);
       setSync('synced');
       return true;
-    } catch {
-      setSync('offline');
+    } catch (err) {
+      setSync(err instanceof UnauthorizedError ? 'unauthorized' : 'offline');
       return false;
     }
   }, [commit]);
+
+  /** Token von Hand nachtragen (installierte PWA) und sofort neu synchronisieren. */
+  const saveToken = useCallback(
+    (token: string) => {
+      setToken(token);
+      void pushAndPull();
+    },
+    [pushAndPull],
+  );
 
   const schedulePush = useCallback(() => {
     if (pushTimer.current) window.clearTimeout(pushTimer.current);
@@ -302,8 +311,8 @@ export function useTracker() {
         setSync('syncing');
         await replaceOnServer(local);
         setSync('synced');
-      } catch {
-        setSync('offline');
+      } catch (err) {
+        setSync(err instanceof UnauthorizedError ? 'unauthorized' : 'offline');
       }
     },
     [commit, flash],
@@ -336,6 +345,7 @@ export function useTracker() {
     stats,
     sync,
     syncNow: pushAndPull,
+    saveToken,
     celebration,
     dismissCelebration: () => setCelebration(null),
     toast,

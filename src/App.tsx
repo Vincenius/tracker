@@ -12,6 +12,7 @@ const SYNC_LABEL: Record<Tracker['sync'], string> = {
   syncing: 'Synchronisiert …',
   synced: 'Mit dem Server synchron',
   offline: 'Offline — lokal gespeichert, wird später synchronisiert',
+  unauthorized: 'Server verlangt ein Token — Daten bleiben nur lokal',
 };
 
 const SYNC_COLOR: Record<Tracker['sync'], string> = {
@@ -19,6 +20,7 @@ const SYNC_COLOR: Record<Tracker['sync'], string> = {
   syncing: 'var(--color-grade-yellow)',
   synced: 'var(--color-grade-green)',
   offline: 'var(--color-rock-500)',
+  unauthorized: 'var(--color-grade-red)',
 };
 
 function SyncBadge({ tracker }: { tracker: Tracker }) {
@@ -36,6 +38,48 @@ function SyncBadge({ tracker }: { tracker: Tracker }) {
         style={{ background: SYNC_COLOR[tracker.sync] }}
       />
     </button>
+  );
+}
+
+/**
+ * Erscheint, wenn der Server den Sync mit 401 ablehnt. Eine installierte PWA
+ * sieht nie eine ?token=…-URL und hat (auf iOS) einen eigenen Cookie-Speicher —
+ * hier lässt sich das Token nachtragen, ohne die App neu zu installieren.
+ */
+function TokenPrompt({ tracker }: { tracker: Tracker }) {
+  const [value, setValue] = useState('');
+
+  return (
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (value.trim()) tracker.saveToken(value);
+      }}
+      className="mb-5 rounded-xl border border-grade-red/50 bg-rock-900 p-4"
+    >
+      <p className="mb-1 text-sm font-semibold">Zugriffstoken nötig</p>
+      <p className="mb-3 text-xs text-chalk-dim">
+        Der Server lehnt dieses Gerät ab. Token einmal eintragen — danach synchronisiert es wieder
+        und deine lokalen Daten werden hochgeladen.
+      </p>
+      <div className="flex gap-2">
+        <input
+          type="password"
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          placeholder="Token"
+          autoComplete="off"
+          className="min-w-0 flex-1 rounded-lg border border-rock-700 bg-rock-950 px-3 py-2 text-sm outline-none focus:border-rock-500"
+        />
+        <button
+          type="submit"
+          disabled={!value.trim()}
+          className="rounded-lg bg-tape px-4 py-2 text-sm font-semibold text-rock-950 transition disabled:opacity-40"
+        >
+          Speichern
+        </button>
+      </div>
+    </form>
   );
 }
 
@@ -84,6 +128,7 @@ export default function App() {
       </nav>
 
       <main className="flex-1">
+        {tracker.sync === 'unauthorized' && <TokenPrompt tracker={tracker} />}
         {tab === 'week' && <WeekView tracker={tracker} />}
         {tab === 'food' && <NutritionView tracker={tracker} />}
         {tab === 'history' && <HistoryView tracker={tracker} />}

@@ -3,6 +3,14 @@ import type { AppData } from './types';
 
 const TOKEN_KEY = 'tracker.token';
 
+/** Der Server hat den Request mit 401 abgelehnt — Token fehlt oder ist falsch. */
+export class UnauthorizedError extends Error {}
+
+/** Token von Hand nachtragen — für installierte PWAs, die nie eine ?token=…-URL sehen. */
+export function setToken(token: string): void {
+  localStorage.setItem(TOKEN_KEY, token.trim());
+}
+
 /** Optionales Token: einmal als ?token=… aufrufen, danach merkt es der Browser. */
 export function initToken(): string {
   const url = new URL(window.location.href);
@@ -26,6 +34,7 @@ function headers(): Record<string, string> {
 
 async function request(path: string, init: RequestInit): Promise<AppData> {
   const res = await fetch(path, { ...init, headers: headers(), cache: 'no-store' });
+  if (res.status === 401) throw new UnauthorizedError('401');
   if (!res.ok) throw new Error(`${res.status}`);
   return parseData(await res.json());
 }

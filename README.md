@@ -16,6 +16,12 @@ essen**. Zwei Frontends, ein Backend, eine JSON-Datei.
 > Compose das Projekt nach dem Verzeichnis, und der Bind-Mount `./data` zeigt
 > ins Leere statt auf die vorhandenen Daten.
 
+> `data/` muss dem Container-User gehören: Docker legt einen fehlenden
+> Mount-Ordner als `root` an, der Container läuft aber als `node` (uid 1000).
+> Dann liest die App noch, aber jeder Sync scheitert. Einmalig auf dem Server:
+> `sudo chown -R 1000:1000 data`. Das Backend sagt beim Start Bescheid, wenn
+> der Ordner nicht beschreibbar ist.
+
 Das Backend in `web/server/index.js` ist die einzige Quelle der Wahrheit. Die
 Web-App liefert es gleich mit aus, die native App spricht dieselbe API an:
 

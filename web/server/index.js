@@ -16,7 +16,7 @@
 import { createServer } from 'node:http';
 import { timingSafeEqual } from 'node:crypto';
 import { createReadStream } from 'node:fs';
-import { mkdir, readFile, rename, stat, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { dirname, extname, join, normalize, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -252,15 +252,23 @@ function send(res, status, body, headers = {}) {
   res.end(payload);
 }
 
+/** Fehler, an dem der Client schuld ist — alles andere ist ein Serverfehler. */
+class BadRequest extends Error {}
+
 async function readBody(req, limit = 2_000_000) {
   const chunks = [];
   let size = 0;
   for await (const chunk of req) {
     size += chunk.length;
-    if (size > limit) throw new Error('too large');
+    if (size > limit) throw new BadRequest('body too large');
     chunks.push(chunk);
   }
-  return chunks.length ? JSON.parse(Buffer.concat(chunks).toString('utf8')) : {};
+  if (!chunks.length) return {};
+  try {
+    return JSON.parse(Buffer.concat(chunks).toString('utf8'));
+  } catch {
+    throw new BadRequest('invalid json');
+  }
 }
 
 async function serveStatic(req, res, pathname) {
@@ -357,13 +365,40 @@ const server = createServer(async (req, res) => {
     }
     return send(res, 404, { error: 'not found' });
   } catch (err) {
-    return send(res, 400, { error: String(err instanceof Error ? err.message : err) });
+    const message = String(err instanceof Error ? err.message : err);
+    if (err instanceof BadRequest) return send(res, 400, { error: message });
+    // Kein 400: hier ist der Server kaputt (z.B. Datei nicht beschreibbar).
+    // Ohne Log stand das früher nur im Netzwerk-Tab des Clients.
+    console.error(`${req.method} ${url.pathname} fehlgeschlagen:`, err);
+    return send(res, 500, { error: message });
   }
 });
 
-server.listen(PORT, () => {
+/**
+ * Ein Bind-Mount, der dem Host-Root gehört, ist für den Container-User `node`
+ * (uid 1000) nicht beschreibbar. Lesen geht trotzdem, deshalb fiel das früher
+ * erst beim ersten Sync auf. Einmal beim Start prüfen und laut sagen.
+ */
+async function checkWritable() {
+  const dir = dirname(DATA_FILE);
+  const probe = join(dir, '.write-probe');
+  try {
+    await mkdir(dir, { recursive: true });
+    await writeFile(probe, '');
+    await rm(probe);
+    return true;
+  } catch (err) {
+    console.error(`\nFEHLER: ${dir} ist nicht beschreibbar — ${err.message}`);
+    console.error('Jeder Sync wird scheitern. Auf dem Host beheben mit:');
+    console.error('  sudo chown -R 1000:1000 data\n');
+    return false;
+  }
+}
+
+server.listen(PORT, async () => {
   console.log(`Tracker läuft auf http://localhost:${PORT}`);
   console.log(`Daten: ${DATA_FILE}`);
+  await checkWritable();
   console.log(
     TOKEN
       ? 'Zugriffsschutz: aktiv (TRACKER_TOKEN) — App und API gesperrt, neue Geräte einmal mit ?token=… öffnen'

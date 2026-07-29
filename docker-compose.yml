@@ -8,6 +8,12 @@ services:
     # zeigen `./data` und `.env` weiterhin dorthin, wo sie auf dem Server liegen.
     build: ./web
     container_name: tracker
+    # Der Container schreibt in einen Bind-Mount vom Host. Läuft er unter einer
+    # anderen uid als der Besitzer von ./data, scheitert jeder Sync mit EACCES —
+    # lesen geht weiter, das fällt also erst spät auf. Deshalb übernimmt er die
+    # uid des Deploy-Users (siehe .env, vom Deploy-Skript gesetzt). Fallback
+    # 1000 ist der `node`-User aus dem Image.
+    user: "${TRACKER_UID:-1000}:${TRACKER_GID:-1000}"
     ports:
       - "3025:3025"
     volumes:

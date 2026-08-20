@@ -5,6 +5,7 @@ import 'package:flutter/widgets.dart';
 
 import 'core/api.dart';
 import 'core/badges.dart';
+import 'core/cheat.dart';
 import 'core/config.dart';
 import 'core/date.dart';
 import 'core/merge.dart';
@@ -36,7 +37,7 @@ String _newId() {
 
 class TrackerStore extends ChangeNotifier with WidgetsBindingObserver {
   TrackerStore() {
-    _stats = computeStats(const [], const [], const [], const [], const []);
+    _stats = computeStats(const [], const [], const [], const [], const [], const []);
   }
 
   AppData _data = AppData.empty;
@@ -66,6 +67,7 @@ class TrackerStore extends ChangeNotifier with WidgetsBindingObserver {
       data.cleanDays,
       data.stairs,
       data.pauses,
+      data.cheatDays,
     );
     return data.copyWith(seenBadges: unlockedBadges(s), seenLevel: s.level);
   }
@@ -104,6 +106,7 @@ class TrackerStore extends ChangeNotifier with WidgetsBindingObserver {
       next.cleanDays,
       next.stairs,
       next.pauses,
+      next.cheatDays,
     );
     if (persist) unawaited(saveData(next));
     notifyListeners();
@@ -175,6 +178,7 @@ class TrackerStore extends ChangeNotifier with WidgetsBindingObserver {
     List<Walk>? walks,
     List<CleanDay>? cleanDays,
     List<Stair>? stairs,
+    List<CheatDay>? cheatDays,
   }) {
     final prev = _data;
     final next = prev.copyWith(
@@ -182,6 +186,7 @@ class TrackerStore extends ChangeNotifier with WidgetsBindingObserver {
       walks: walks,
       cleanDays: cleanDays,
       stairs: stairs,
+      cheatDays: cheatDays,
     );
     final nextStats = computeStats(
       next.sessions,
@@ -189,6 +194,7 @@ class TrackerStore extends ChangeNotifier with WidgetsBindingObserver {
       next.cleanDays,
       next.stairs,
       prev.pauses,
+      next.cheatDays,
     );
     final unlocked = unlockedBadges(nextStats);
     final fresh = [for (final id in unlocked) if (!prev.seenBadges.contains(id)) id];
@@ -215,6 +221,7 @@ class TrackerStore extends ChangeNotifier with WidgetsBindingObserver {
     List<Walk>? walks,
     List<CleanDay>? cleanDays,
     List<Stair>? stairs,
+    List<CheatDay>? cheatDays,
   }) {
     final prev = _data;
     final next = prev.copyWith(
@@ -222,6 +229,7 @@ class TrackerStore extends ChangeNotifier with WidgetsBindingObserver {
       walks: walks,
       cleanDays: cleanDays,
       stairs: stairs,
+      cheatDays: cheatDays,
     );
     final level = computeStats(
       next.sessions,
@@ -229,6 +237,7 @@ class TrackerStore extends ChangeNotifier with WidgetsBindingObserver {
       next.cleanDays,
       next.stairs,
       prev.pauses,
+      next.cheatDays,
     ).level;
     _apply(next.copyWith(
       deleted: {...prev.deleted, ...ids}.toList(),
@@ -302,6 +311,37 @@ class TrackerStore extends ChangeNotifier with WidgetsBindingObserver {
       ts: DateTime.now().millisecondsSinceEpoch,
     );
     _commitEarned(cleanDays: [..._data.cleanDays, entry]);
+  }
+
+  /// Cheat Day setzen oder zurücknehmen. Einer pro Woche: der Tag wird bei der
+  /// Ernährung übersprungen, statt die Serie zu brechen — XP bringt er keine.
+  /// Ist die Woche schon vergeben, passiert nichts außer einem Hinweis; so
+  /// bleibt der gesetzte Tag stehen, bis er bewusst zurückgenommen wird.
+  void toggleCheat(String date) {
+    final existing = [for (final c in _data.cheatDays) if (c.date == date) c];
+    if (existing.isNotEmpty) {
+      final ids = {for (final c in existing) c.id};
+      _commitRemoved(
+        ids,
+        'Cheat Day zurückgenommen.',
+        cheatDays: [for (final c in _data.cheatDays) if (!ids.contains(c.id)) c],
+      );
+      return;
+    }
+
+    final taken = cheatInfo(_data.cheatDays).byWeek[weekKeyOf(date)];
+    if (taken != null) {
+      flash('Diese Woche steht der Cheat Day schon auf dem ${shortDate(taken)}.');
+      return;
+    }
+
+    final entry = CheatDay(
+      id: _newId(),
+      date: date,
+      ts: DateTime.now().millisecondsSinceEpoch,
+    );
+    _commitEarned(cheatDays: [..._data.cheatDays, entry]);
+    flash('Cheat Day gesetzt — deine Serie läuft weiter.');
   }
 
   /// Treppe genommen — zählt sofort, beliebig oft am Tag.

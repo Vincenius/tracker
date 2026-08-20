@@ -253,10 +253,15 @@ class _HistoryViewState extends State<HistoryView> {
                             color: stats.lanes[lane.kind]!.dates.contains(d.date)
                                 ? lane.color
                                 : C.rock800,
+                            // Cheat-Tage bleiben leer, bekommen aber einen
+                            // eigenen Rand — sonst sähen sie wie ein
+                            // Ausrutscher aus.
                             border: Border.all(
                               color: stats.lanes[lane.kind]!.dates.contains(d.date)
                                   ? Colors.transparent
-                                  : C.rock700,
+                                  : stats.cheatDates.contains(d.date)
+                                      ? C.gradeYellow
+                                      : C.rock700,
                             ),
                             borderRadius: BorderRadius.circular(4),
                           ),

@@ -29,6 +29,7 @@ AppData parseData(Object? raw) {
     walks: pick(raw['walks'], Walk.fromJson)..sort((a, b) => a.ts - b.ts),
     cleanDays: pick(raw['cleanDays'], CleanDay.fromJson)..sort((a, b) => a.ts - b.ts),
     stairs: pick(raw['stairs'], Stair.fromJson)..sort((a, b) => a.ts - b.ts),
+    cheatDays: pick(raw['cheatDays'], CheatDay.fromJson)..sort((a, b) => a.ts - b.ts),
     pauses: pick(raw['pauses'], PauseEvent.fromJson)..sort((a, b) => a.ts - b.ts),
     seenBadges: strings(raw['seenBadges']),
     seenLevel: raw['seenLevel'] is num ? (raw['seenLevel'] as num).toInt() : 1,

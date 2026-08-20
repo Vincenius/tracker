@@ -27,6 +27,7 @@ AppData mergeData(AppData a, AppData b) {
     walks: _union(a.walks, b.walks, deleted, (w) => w.id, (w) => w.ts),
     cleanDays: _union(a.cleanDays, b.cleanDays, deleted, (c) => c.id, (c) => c.ts),
     stairs: _union(a.stairs, b.stairs, deleted, (s) => s.id, (s) => s.ts),
+    cheatDays: _union(a.cheatDays, b.cheatDays, deleted, (c) => c.id, (c) => c.ts),
     pauses: _union(a.pauses, b.pauses, deleted, (p) => p.id, (p) => p.ts),
     seenBadges: {...a.seenBadges, ...b.seenBadges}.toList(),
     seenLevel: a.seenLevel > b.seenLevel ? a.seenLevel : b.seenLevel,
@@ -48,5 +49,6 @@ bool sameData(AppData a, AppData b) {
       sameIds(a.walks, b.walks, (w) => w.id) &&
       sameIds(a.cleanDays, b.cleanDays, (c) => c.id) &&
       sameIds(a.stairs, b.stairs, (s) => s.id) &&
+      sameIds(a.cheatDays, b.cheatDays, (c) => c.id) &&
       sameIds(a.pauses, b.pauses, (p) => p.id);
 }

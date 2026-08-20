@@ -49,6 +49,7 @@ Logik doppelt vor und muss zusammen geändert werden:
 | `web/src/lib/badges.ts` | `app/lib/core/badges.dart` |
 | `web/src/lib/merge.ts` + `web/server/index.js` | `app/lib/core/merge.dart` |
 | `web/src/lib/pause.ts` | `app/lib/core/pause.dart` |
+| `web/src/lib/cheat.ts` | `app/lib/core/cheat.dart` |
 | `web/src/lib/workouts.ts` | `app/lib/core/workouts.dart` |
 | `web/src/lib/nutrition.ts` | `app/lib/core/nutrition.dart` |
 | `web/src/lib/store.ts` | `app/lib/store.dart` |

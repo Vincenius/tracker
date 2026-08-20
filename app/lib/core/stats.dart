@@ -1,3 +1,4 @@
+import 'cheat.dart';
 import 'date.dart';
 import 'pause.dart';
 import 'types.dart';
@@ -137,6 +138,9 @@ class Stats {
     required this.stairBestDay,
     required this.stairStreak,
     required this.longestStairStreak,
+    required this.cheatDates,
+    required this.cheatThisWeek,
+    required this.cheatTotal,
     required this.pauseActive,
     required this.pausedSince,
   });
@@ -208,6 +212,16 @@ class Stats {
   final int stairBestDay;
   final int stairStreak;
   final int longestStairStreak;
+
+  // ——— Cheat Days ———
+  /// Gesetzte Cheat-Tage — je Woche zählt nur einer
+  final Set<String> cheatDates;
+
+  /// Cheat Day der laufenden Woche — null, wenn noch keiner gesetzt ist
+  final String? cheatThisWeek;
+
+  /// Cheat-Tage insgesamt
+  final int cheatTotal;
 
   // ——— Pausenmodus ———
   final bool pauseActive;
@@ -328,6 +342,7 @@ Stats computeStats(
   List<CleanDay> cleanDaysInput = const [],
   List<Stair> stairs = const [],
   List<PauseEvent> pauseEvents = const [],
+  List<CheatDay> cheatDays = const [],
   DateTime? nowInput,
 ]) {
   final now = nowInput ?? DateTime.now();
@@ -359,6 +374,11 @@ Stats computeStats(
   bool weekPaused(String key) =>
       [0, 1, 2, 3, 4, 5, 6].any((i) => paused.contains(addDays(key, i)));
 
+  // ——— Cheat Days: übersprungen wie Pausentage, aber nur bei der Ernährung.
+  // Training, Spaziergang und Treppe interessiert der Cheat Day nicht.
+  final cheat = cheatInfo(cheatDays);
+  final cleanSkip = {...paused, ...cheat.dates};
+
   // ——— Ernährung: erst die Serien, daraus die XP pro Tag ———
   final laneDates = {CleanKind.snacks: <String>{}, CleanKind.drinks: <String>{}};
   for (final c in cleanDaysInput) {
@@ -378,8 +398,8 @@ Stats computeStats(
 
   for (final kind in cleanKinds) {
     final dates = laneDates[kind]!;
-    final laneResult = _laneXpByDate(dates, paused);
-    final currentStreak = _streakBack(dates, today, paused);
+    final laneResult = _laneXpByDate(dates, cleanSkip);
+    final currentStreak = _streakBack(dates, today, cleanSkip);
     var laneXp = 0;
     laneResult.xp.forEach((date, value) {
       laneXp += value;
@@ -404,14 +424,14 @@ Stats computeStats(
     cleanXpByDate[date] = (cleanXpByDate[date] ?? 0) + xpCleanCombo;
   }
 
-  final cleanBothStreak = _streakBack(bothSet, today, paused);
+  final cleanBothStreak = _streakBack(bothSet, today, cleanSkip);
   var longestCleanBothStreak = 0;
   // Serien ab einer Woche zählen; ab der zweiten ist jede ein Wiedereinstieg.
   var longRuns = 0;
   var bothRun = 0;
   String? prevBoth;
   for (final date in bothDates) {
-    bothRun = _joins(prevBoth, date, paused) ? bothRun + 1 : 1;
+    bothRun = _joins(prevBoth, date, cleanSkip) ? bothRun + 1 : 1;
     if (bothRun > longestCleanBothStreak) longestCleanBothStreak = bothRun;
     if (bothRun == cleanGoal) longRuns++;
     prevBoth = date;
@@ -627,6 +647,9 @@ Stats computeStats(
     stairBestDay: stairBestDay,
     stairStreak: stairStreak,
     longestStairStreak: longestStairStreak,
+    cheatDates: cheat.dates,
+    cheatThisWeek: cheat.byWeek[thisWeek],
+    cheatTotal: cheat.dates.length,
     pauseActive: info.activeSince != null,
     pausedSince: info.activeSince,
   );

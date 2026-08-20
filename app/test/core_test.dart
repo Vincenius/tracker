@@ -27,6 +27,9 @@ CleanDay _clean(String date, CleanKind kind) => CleanDay(
       ts: fromISODate(date).millisecondsSinceEpoch,
     );
 
+CheatDay _cheat(String date) =>
+    CheatDay(id: 'x-$date', date: date, ts: fromISODate(date).millisecondsSinceEpoch);
+
 void main() {
   group('date', () {
     test('Wochen laufen Montag bis Sonntag', () {
@@ -72,6 +75,7 @@ void main() {
         const [],
         const [],
         const [],
+        const [],
         now,
       );
       expect(s.weeks['2026-07-27']!.fulfilled, isTrue);
@@ -90,6 +94,7 @@ void main() {
         [for (final d in dates) _clean(d, CleanKind.snacks)],
         const [],
         const [],
+        const [],
         now,
       );
       // Tage 1..8 -> 2,3,4,5,6,6,6,6 = 38
@@ -104,6 +109,7 @@ void main() {
         const [],
         const [],
         [_clean('2026-07-29', CleanKind.snacks), _clean('2026-07-29', CleanKind.drinks)],
+        const [],
         const [],
         const [],
         now,
@@ -122,12 +128,54 @@ void main() {
         const [],
         const [],
         pauses,
+        const [],
         now,
       );
       expect(s.pauseActive, isTrue);
       expect(s.pausedSince, '2026-07-27');
       // Mo–Mi sind pausiert, die Serie reicht durch bis Donnerstag der Vorwoche.
       expect(s.walkStreak, 2);
+    });
+
+    test('Cheat Day überspringt den Tag, statt die Serie zu brechen', () {
+      // Mo, Di, Do, Mi ist der Cheat Day — die Serie läuft durch.
+      final s = computeStats(
+        const [],
+        const [],
+        [
+          for (final d in ['2026-07-27', '2026-07-28', '2026-07-30'])
+            _clean(d, CleanKind.snacks),
+        ],
+        const [],
+        const [],
+        [_cheat('2026-07-29')],
+        fromISODate('2026-07-30'),
+      );
+      final lane = s.lanes[CleanKind.snacks]!;
+      expect(lane.currentStreak, 3);
+      expect(s.cheatThisWeek, '2026-07-29');
+      // Der Cheat Day bringt keine XP: 2 + 3 + 4 für die drei sauberen Tage.
+      expect(lane.xp, 9);
+    });
+
+    test('pro Woche zählt nur der älteste Cheat Day', () {
+      final s = computeStats(
+        const [],
+        const [],
+        const [],
+        const [],
+        const [],
+        [
+          const CheatDay(id: 'b', date: '2026-07-30', ts: 200),
+          const CheatDay(id: 'a', date: '2026-07-28', ts: 100),
+          // Nächste Woche zählt wieder ein eigener.
+          const CheatDay(id: 'c', date: '2026-08-04', ts: 300),
+        ],
+        fromISODate('2026-08-05'),
+      );
+      expect(s.cheatDates, {'2026-07-28', '2026-08-04'});
+      expect(s.cheatThisWeek, '2026-08-04');
+      expect(s.cheatTotal, 2);
     });
 
     test('Treppe zählt jeden Aufstieg', () {
@@ -140,6 +188,7 @@ void main() {
             Stair(id: 's$i', date: '2026-07-29', ts: 1000 + i),
         ],
         const [],
+        const [],
         now,
       );
       expect(s.stairTotal, 3);
@@ -149,7 +198,15 @@ void main() {
     });
 
     test('leere Daten liefern Level 1', () {
-      final s = computeStats(const [], const [], const [], const [], const [], now);
+      final s = computeStats(
+        const [],
+        const [],
+        const [],
+        const [],
+        const [],
+        const [],
+        now,
+      );
       expect(s.level, 1);
       expect(s.xp, 0);
       expect(s.stairBestDay, 0);
@@ -185,6 +242,7 @@ void main() {
         walks: [_walk('2026-07-28')],
         cleanDays: [_clean('2026-07-29', CleanKind.drinks)],
         stairs: const [Stair(id: 's1', date: '2026-07-29', ts: 5)],
+        cheatDays: const [CheatDay(id: 'x1', date: '2026-07-25', ts: 4)],
         pauses: const [
           PauseEvent(id: 'p1', date: '2026-07-01', ts: 1, action: PauseAction.stop),
         ],
@@ -197,6 +255,7 @@ void main() {
       expect(back.walks.single.date, '2026-07-28');
       expect(back.cleanDays.single.kind, CleanKind.drinks);
       expect(back.stairs.single.id, 's1');
+      expect(back.cheatDays.single.date, '2026-07-25');
       expect(back.pauses.single.action, PauseAction.stop);
       expect(back.seenLevel, 3);
       expect(back.deleted, ['gone']);

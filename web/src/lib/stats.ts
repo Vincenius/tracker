@@ -1,3 +1,4 @@
+import { cheatInfo } from './cheat';
 import {
   addDays,
   addWeeks,
@@ -10,7 +11,16 @@ import {
   weeksBetween,
 } from './date';
 import { pauseInfo } from './pause';
-import type { CleanDay, CleanKind, PauseEvent, Session, SessionType, Stair, Walk } from './types';
+import type {
+  CheatDay,
+  CleanDay,
+  CleanKind,
+  PauseEvent,
+  Session,
+  SessionType,
+  Stair,
+  Walk,
+} from './types';
 import {
   CLEAN_KINDS,
   WALK_GOAL,
@@ -149,6 +159,14 @@ export interface Stats {
   stairStreak: number;
   longestStairStreak: number;
 
+  // ——— Cheat Days ———
+  /** Gesetzte Cheat-Tage — je Woche zählt nur einer */
+  cheatDates: Set<string>;
+  /** Cheat Day der laufenden Woche — null, wenn noch keiner gesetzt ist */
+  cheatThisWeek: string | null;
+  /** Cheat-Tage insgesamt */
+  cheatTotal: number;
+
   // ——— Pausenmodus ———
   /** Pause läuft: Streaks frieren ein, Einträge zählen trotzdem */
   pauseActive: boolean;
@@ -261,6 +279,7 @@ export function computeStats(
   cleanDaysInput: CleanDay[] = [],
   stairs: Stair[] = [],
   pauseEvents: PauseEvent[] = [],
+  cheatDays: CheatDay[] = [],
   now = new Date(),
 ): Stats {
   const buckets = new Map<string, Session[]>();
@@ -303,6 +322,11 @@ export function computeStats(
   const weekPaused = (key: string) =>
     [0, 1, 2, 3, 4, 5, 6].some((i) => paused.has(addDays(key, i)));
 
+  // ——— Cheat Days: übersprungen wie Pausentage, aber nur bei der Ernährung.
+  // Training, Spaziergang und Treppe interessiert der Cheat Day nicht.
+  const cheat = cheatInfo(cheatDays);
+  const cleanSkip = new Set([...paused, ...cheat.dates]);
+
   // ——— Ernährung: erst die Serien, daraus die XP pro Tag ———
   const laneDates: Record<CleanKind, Set<string>> = { snacks: new Set(), drinks: new Set() };
   for (const c of cleanDaysInput) laneDates[c.kind].add(c.date);
@@ -317,8 +341,8 @@ export function computeStats(
 
   for (const kind of CLEAN_KINDS) {
     const dates = laneDates[kind];
-    const { xp: byDate, longest } = laneXpByDate(dates, paused);
-    const currentStreak = streakBack(dates, today, paused);
+    const { xp: byDate, longest } = laneXpByDate(dates, cleanSkip);
+    const currentStreak = streakBack(dates, today, cleanSkip);
     let laneXp = 0;
     for (const [date, value] of byDate) {
       laneXp += value;
@@ -342,7 +366,7 @@ export function computeStats(
     cleanXpByDate.set(date, (cleanXpByDate.get(date) ?? 0) + XP_CLEAN_COMBO);
   }
 
-  const cleanBothStreak = streakBack(bothSet, today, paused);
+  const cleanBothStreak = streakBack(bothSet, today, cleanSkip);
   let longestCleanBothStreak = 0;
   // Serien ab einer Woche zählen; ab der zweiten ist jede ein Wiedereinstieg
   // nach einem Ausrutscher.
@@ -350,7 +374,7 @@ export function computeStats(
   let bothRun = 0;
   let prevBoth: string | null = null;
   for (const date of bothDates) {
-    bothRun = joins(prevBoth, date, paused) ? bothRun + 1 : 1;
+    bothRun = joins(prevBoth, date, cleanSkip) ? bothRun + 1 : 1;
     if (bothRun > longestCleanBothStreak) longestCleanBothStreak = bothRun;
     if (bothRun === CLEAN_GOAL) longRuns++;
     prevBoth = date;
@@ -544,6 +568,9 @@ export function computeStats(
     stairBestDay: Math.max(0, ...stairPerDay.values()),
     stairStreak,
     longestStairStreak,
+    cheatDates: cheat.dates,
+    cheatThisWeek: cheat.byWeek.get(thisWeek) ?? null,
+    cheatTotal: cheat.dates.size,
     pauseActive: activeSince !== null,
     pausedSince: activeSince,
   };

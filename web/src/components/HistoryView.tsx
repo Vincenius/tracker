@@ -197,18 +197,29 @@ export function HistoryView({ tracker }: { tracker: Tracker }) {
                   </span>
                 </div>
                 <div className="grid grid-cols-[repeat(auto-fill,minmax(14px,1fr))] gap-1">
-                  {foodDays.map((d) => (
-                    <div
-                      key={`${lane.kind}-${d.date}`}
-                      title={`${weekdayLabel(d.date)}, ${shortDate(d.date)}`}
-                      className="aspect-square rounded-[4px] border"
-                      style={{
-                        background: dates.has(d.date) ? lane.color : 'var(--color-rock-800)',
-                        borderColor: dates.has(d.date) ? 'transparent' : 'var(--color-rock-700)',
-                        opacity: d.future ? 0.3 : 1,
-                      }}
-                    />
-                  ))}
+                  {foodDays.map((d) => {
+                    // Cheat-Tage bleiben leer, bekommen aber einen eigenen
+                    // Rand — sonst sähen sie wie ein Ausrutscher aus.
+                    const cheat = stats.cheatDates.has(d.date);
+                    return (
+                      <div
+                        key={`${lane.kind}-${d.date}`}
+                        title={`${weekdayLabel(d.date)}, ${shortDate(d.date)}${
+                          cheat ? ' — Cheat Day' : ''
+                        }`}
+                        className="aspect-square rounded-[4px] border"
+                        style={{
+                          background: dates.has(d.date) ? lane.color : 'var(--color-rock-800)',
+                          borderColor: dates.has(d.date)
+                            ? 'transparent'
+                            : cheat
+                              ? 'var(--color-grade-yellow)'
+                              : 'var(--color-rock-700)',
+                          opacity: d.future ? 0.3 : 1,
+                        }}
+                      />
+                    );
+                  })}
                 </div>
               </div>
             );

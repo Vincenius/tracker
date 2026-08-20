@@ -1,4 +1,4 @@
-import type { AppData, CleanDay, PauseEvent, Session, Stair, Walk } from './types';
+import type { AppData, CheatDay, CleanDay, PauseEvent, Session, Stair, Walk } from './types';
 
 const KEY = 'tracker.v1';
 /** Alter Schlüssel aus der Zeit, als die App "Chalk" hieß. */
@@ -10,6 +10,7 @@ export const emptyData: AppData = {
   walks: [],
   cleanDays: [],
   stairs: [],
+  cheatDays: [],
   pauses: [],
   seenBadges: [],
   seenLevel: 1,
@@ -51,6 +52,12 @@ function isStair(v: unknown): v is Stair {
   return typeof s.id === 'string' && typeof s.date === 'string' && typeof s.ts === 'number';
 }
 
+function isCheatDay(v: unknown): v is CheatDay {
+  if (!v || typeof v !== 'object') return false;
+  const c = v as Record<string, unknown>;
+  return typeof c.id === 'string' && typeof c.date === 'string' && typeof c.ts === 'number';
+}
+
 function isPauseEvent(v: unknown): v is PauseEvent {
   if (!v || typeof v !== 'object') return false;
   const p = v as Record<string, unknown>;
@@ -69,6 +76,7 @@ export function parseData(raw: unknown): AppData {
   const walks = Array.isArray(d.walks) ? d.walks.filter(isWalk) : [];
   const cleanDays = Array.isArray(d.cleanDays) ? d.cleanDays.filter(isCleanDay) : [];
   const stairs = Array.isArray(d.stairs) ? d.stairs.filter(isStair) : [];
+  const cheatDays = Array.isArray(d.cheatDays) ? d.cheatDays.filter(isCheatDay) : [];
   const pauses = Array.isArray(d.pauses) ? d.pauses.filter(isPauseEvent) : [];
   const strings = (v: unknown) =>
     Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [];
@@ -78,6 +86,7 @@ export function parseData(raw: unknown): AppData {
     walks: walks.sort((a, b) => a.ts - b.ts),
     cleanDays: cleanDays.sort((a, b) => a.ts - b.ts),
     stairs: stairs.sort((a, b) => a.ts - b.ts),
+    cheatDays: cheatDays.sort((a, b) => a.ts - b.ts),
     pauses: pauses.sort((a, b) => a.ts - b.ts),
     seenBadges: strings(d.seenBadges),
     seenLevel: typeof d.seenLevel === 'number' ? d.seenLevel : 1,

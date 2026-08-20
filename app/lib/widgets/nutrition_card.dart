@@ -12,16 +12,24 @@ import 'card.dart';
 /// verlangt — deshalb steht sie auch auf dem Startbildschirm.
 /// Portierung von web/src/components/NutritionCard.tsx.
 class NutritionCard extends StatelessWidget {
-  const NutritionCard({super.key, required this.stats, required this.toggleClean});
+  const NutritionCard({
+    super.key,
+    required this.stats,
+    required this.toggleClean,
+    required this.toggleCheat,
+  });
 
   final Stats stats;
   final void Function(String, CleanKind) toggleClean;
+  final void Function(String) toggleCheat;
 
   @override
   Widget build(BuildContext context) {
     final today = toISODate(DateTime.now());
     final openCombo = laneList.any((l) => !stats.lanes[l.kind]!.dates.contains(today));
     final bothToday = laneList.every((l) => stats.lanes[l.kind]!.dates.contains(today));
+    final cheat = stats.cheatThisWeek;
+    final cheatToday = cheat == today;
 
     return TrackerCard(
       child: Column(
@@ -52,6 +60,14 @@ class NutritionCard extends StatelessWidget {
             ),
             const SizedBox(height: 8),
           ],
+          // Die Notbremse für heute — an anderen Tagen der Woche nur als
+          // Hinweis, zurücknehmen lässt sie sich in der Ernährungs-Ansicht.
+          _CheatButton(
+            cheat: cheat,
+            cheatToday: cheatToday,
+            onTap: cheat == null || cheatToday ? () => toggleCheat(today) : null,
+          ),
+          const SizedBox(height: 8),
           Hint(
             bothToday
                 ? 'Beide Spuren sauber — inklusive +$xpCleanCombo XP Kombi-Bonus.'
@@ -133,6 +149,53 @@ class _LaneToggle extends StatelessWidget {
                 ),
               ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CheatButton extends StatelessWidget {
+  const _CheatButton({required this.cheat, required this.cheatToday, this.onTap});
+
+  final String? cheat;
+  final bool cheatToday;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final label = cheatToday
+        ? 'Heute ist Cheat Day — die Serien laufen weiter.'
+        : cheat != null
+            ? 'Cheat Day diese Woche: ${weekdayLabel(cheat!)}, ${shortDate(cheat!)}.'
+            : 'Heute zum Cheat Day machen — einer pro Woche.';
+    return Opacity(
+      opacity: onTap == null ? 0.6 : 1,
+      child: Material(
+        color: cheatToday ? tint(C.gradeYellow, 0.16) : C.rock850,
+        borderRadius: BorderRadius.circular(12),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(12),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              border: Border.all(color: cheatToday ? C.gradeYellow : C.rock700),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(
+              children: [
+                const Text('🍕', style: TextStyle(fontSize: 16, height: 1)),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    label,
+                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),

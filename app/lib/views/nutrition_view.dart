@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../core/cheat.dart';
 import '../core/date.dart';
 import '../core/nutrition.dart';
 import '../core/stats.dart';
@@ -10,6 +11,9 @@ import '../widgets/card.dart';
 
 const _days = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
 const _historyWeeks = 8;
+
+/// Der Cheat Day gehört zu keiner Spur — deshalb eine eigene Farbe.
+const _cheatColor = C.gradeYellow;
 
 /// Portierung von web/src/components/NutritionView.tsx.
 class NutritionView extends StatelessWidget {
@@ -76,11 +80,19 @@ class NutritionView extends StatelessWidget {
           _LaneCard(
             lane: lane,
             stats: stats.lanes[lane.kind]!,
+            cheatDates: stats.cheatDates,
             weekKey: weekKey,
             today: today,
             toggleClean: store.toggleClean,
           ),
         ],
+        const SizedBox(height: 16),
+        _CheatCard(
+          picked: stats.cheatThisWeek,
+          weekKey: weekKey,
+          today: today,
+          toggleCheat: store.toggleCheat,
+        ),
         const SizedBox(height: 16),
         TrackerCard(
           child: Column(
@@ -135,6 +147,7 @@ class NutritionView extends StatelessWidget {
                             builder: (context) {
                               final date = addDays(wk, i);
                               final on = stats.lanes[lane.kind]!.dates.contains(date);
+                              final cheat = stats.cheatDates.contains(date);
                               final future = date.compareTo(today) > 0;
                               return Opacity(
                                 opacity: future ? 0.25 : 1,
@@ -148,9 +161,11 @@ class NutritionView extends StatelessWidget {
                                       border: Border.all(
                                         color: on
                                             ? Colors.transparent
-                                            : date == today
-                                                ? C.tape
-                                                : C.rock700,
+                                            : cheat
+                                                ? _cheatColor
+                                                : date == today
+                                                    ? C.tape
+                                                    : C.rock700,
                                       ),
                                       borderRadius: BorderRadius.circular(5),
                                     ),
@@ -184,6 +199,10 @@ class NutritionView extends StatelessWidget {
               _Bullet(
                 'Ein Ausrutscher setzt nur den Zähler zurück — verdiente XP bleiben. '
                 '$xpPerLevel XP sind ein Level.',
+              ),
+              _Bullet(
+                'Cheat Day: $cheatPerWeek× pro Woche ein Tag, der übersprungen wird. '
+                'Keine XP, aber die Serie läuft weiter.',
               ),
             ],
           ),
@@ -219,6 +238,7 @@ class _LaneCard extends StatelessWidget {
   const _LaneCard({
     required this.lane,
     required this.stats,
+    required this.cheatDates,
     required this.weekKey,
     required this.today,
     required this.toggleClean,
@@ -226,6 +246,7 @@ class _LaneCard extends StatelessWidget {
 
   final LaneMeta lane;
   final LaneStats stats;
+  final Set<String> cheatDates;
   final String weekKey;
   final String today;
   final void Function(String, CleanKind) toggleClean;
@@ -276,8 +297,12 @@ class _LaneCard extends StatelessWidget {
                       today: weekDates[i] == today,
                       // Die Zukunft lässt sich nicht abhaken — der Tag ist noch offen.
                       disabled: weekDates[i].compareTo(today) > 0,
+                      offMark: cheatDates.contains(weekDates[i]) ? '🍕' : '·',
+                      offBorder:
+                          cheatDates.contains(weekDates[i]) ? _cheatColor : null,
                       semantics: '${weekdayLabel(weekDates[i])}, '
-                          '${shortDate(weekDates[i])} — ${lane.title}',
+                          '${shortDate(weekDates[i])} — ${lane.title}'
+                          '${cheatDates.contains(weekDates[i]) ? ' (Cheat Day)' : ''}',
                       onTap: () => toggleClean(weekDates[i], lane.kind),
                     ),
                   ),
@@ -296,6 +321,94 @@ class _LaneCard extends StatelessWidget {
                 : 'Der erste Tag bringt +${xpForCleanDay(1)} XP, jeder weitere mehr — '
                     'bis +$xpCleanCap.'
                     '${stats.longestStreak > stats.currentStreak ? ' · Bestserie ${stats.longestStreak} Tage' : ''}',
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Der Cheat Day ist die Notbremse der Ernährung: ein Tag pro Woche, an dem
+/// nichts zählt — weder als sauberer Tag noch als Ausrutscher. Bewusst gesetzt
+/// statt automatisch verrechnet, damit die Entscheidung sichtbar bleibt.
+class _CheatCard extends StatelessWidget {
+  const _CheatCard({
+    required this.picked,
+    required this.weekKey,
+    required this.today,
+    required this.toggleCheat,
+  });
+
+  final String? picked;
+  final String weekKey;
+  final String today;
+  final void Function(String) toggleCheat;
+
+  @override
+  Widget build(BuildContext context) {
+    final weekDates = [for (var i = 0; i < 7; i++) addDays(weekKey, i)];
+
+    return TrackerCard(
+      accent: _cheatColor,
+      active: picked != null,
+      padding: const EdgeInsets.fromLTRB(16, 20, 16, 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          CardHeader(
+            leading: const Text('🍕', style: TextStyle(fontSize: 24, height: 1)),
+            chip: '$cheatPerWeek× pro Woche',
+            chipColor: _cheatColor,
+            title: 'Cheat Day',
+            subtitle: picked != null
+                ? '${weekdayLabel(picked!)}, ${shortDate(picked!)} zählt nicht — '
+                    'deine Serien laufen weiter.'
+                : 'Ein Tag pro Woche, an dem die Ernährung nicht zählt. '
+                    'Die Serie bricht nicht.',
+            trailing: Text.rich(
+              TextSpan(
+                text: picked != null ? '1' : '0',
+                style: displaySize(22),
+                children: [
+                  TextSpan(
+                    text: '/$cheatPerWeek',
+                    style: displaySize(22, color: C.chalkFaint),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              for (var i = 0; i < 7; i++)
+                Expanded(
+                  child: Padding(
+                    padding: EdgeInsets.only(right: i == 6 ? 0 : 6),
+                    child: DayToggle(
+                      label: _days[i],
+                      on: weekDates[i] == picked,
+                      color: _cheatColor,
+                      today: weekDates[i] == today,
+                      // Die Zukunft bleibt offen, und ist der Tag vergeben,
+                      // führt nur der Weg über den gesetzten Tag zurück.
+                      disabled: weekDates[i].compareTo(today) > 0 ||
+                          (picked != null && weekDates[i] != picked),
+                      onMark: '🍕',
+                      semantics: '${weekdayLabel(weekDates[i])}, '
+                          '${shortDate(weekDates[i])} — Cheat Day',
+                      onTap: () => toggleCheat(weekDates[i]),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Hint(
+            picked != null
+                ? 'Nochmal antippen nimmt ihn zurück — dann ist die Woche wieder frei.'
+                : 'Der Tag bringt keine XP, er hält nur die Serie am Leben. '
+                    'Am Montag gibt es einen neuen.',
           ),
         ],
       ),

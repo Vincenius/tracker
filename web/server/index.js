@@ -32,6 +32,7 @@ const EMPTY = {
   walks: [],
   cleanDays: [],
   stairs: [],
+  cheatDays: [],
   pauses: [],
   seenBadges: [],
   seenLevel: 1,
@@ -169,6 +170,12 @@ function sanitize(raw) {
           s && typeof s.id === 'string' && typeof s.date === 'string' && typeof s.ts === 'number',
       )
     : [];
+  const cheatDays = Array.isArray(d.cheatDays)
+    ? d.cheatDays.filter(
+        (c) =>
+          c && typeof c.id === 'string' && typeof c.date === 'string' && typeof c.ts === 'number',
+      )
+    : [];
   const pauses = Array.isArray(d.pauses)
     ? d.pauses.filter(
         (p) =>
@@ -186,6 +193,7 @@ function sanitize(raw) {
     walks,
     cleanDays,
     stairs,
+    cheatDays,
     pauses,
     seenBadges: strings(d.seenBadges),
     seenLevel: typeof d.seenLevel === 'number' ? d.seenLevel : 1,
@@ -210,6 +218,7 @@ function merge(a, b) {
     walks: union(a.walks, b.walks, deleted),
     cleanDays: union(a.cleanDays, b.cleanDays, deleted),
     stairs: union(a.stairs, b.stairs, deleted),
+    cheatDays: union(a.cheatDays, b.cheatDays, deleted),
     pauses: union(a.pauses, b.pauses, deleted),
     seenBadges: [...new Set([...a.seenBadges, ...b.seenBadges])],
     seenLevel: Math.max(a.seenLevel, b.seenLevel),

@@ -1,4 +1,5 @@
 import { addDays, addWeeks, currentWeekKey, shortDate, toISODate, weekdayLabel } from '../lib/date';
+import { CHEAT_PER_WEEK } from '../lib/cheat';
 import { LANE_LIST, type LaneMeta } from '../lib/nutrition';
 import { CLEAN_GOAL, type LaneStats } from '../lib/stats';
 import type { Tracker } from '../lib/store';
@@ -12,6 +13,9 @@ import {
 
 const DAYS = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
 const HISTORY_WEEKS = 8;
+
+/** Der Cheat Day gehört zu keiner Spur — deshalb eine eigene Farbe. */
+const CHEAT_COLOR = 'var(--color-grade-yellow)';
 
 /** Die Leiter zeigt, was der nächste Tag wert ist — und wo die Serie steht. */
 function StreakLadder({ lane, stats }: { lane: LaneMeta; stats: LaneStats }) {
@@ -65,12 +69,14 @@ function StreakLadder({ lane, stats }: { lane: LaneMeta; stats: LaneStats }) {
 function LaneCard({
   lane,
   stats,
+  cheatDates,
   weekKey,
   today,
   toggleClean,
 }: {
   lane: LaneMeta;
   stats: LaneStats;
+  cheatDates: Set<string>;
   weekKey: string;
   today: string;
   toggleClean: Tracker['toggleClean'];
@@ -120,6 +126,7 @@ function LaneCard({
           {DAYS.map((label, i) => {
             const date = weekDates[i];
             const on = stats.dates.has(date);
+            const cheat = cheatDates.has(date);
             const isToday = date === today;
             // Die Zukunft lässt sich nicht abhaken — der Tag ist noch offen.
             const future = date > today;
@@ -131,7 +138,7 @@ function LaneCard({
                 onClick={() => toggleClean(date, lane.kind)}
                 aria-pressed={on}
                 aria-label={`${weekdayLabel(date)}, ${shortDate(date)} — ${lane.title}${
-                  on ? ' ✓' : ''
+                  on ? ' ✓' : cheat ? ' (Cheat Day)' : ''
                 }`}
                 className={`flex flex-col items-center gap-1 rounded-xl border px-1 py-2.5 text-xs font-semibold transition active:scale-[0.96] disabled:cursor-not-allowed disabled:opacity-35 ${
                   on ? 'text-rock-950' : 'border-rock-700 bg-rock-850 text-chalk-dim hover:border-rock-500'
@@ -139,14 +146,16 @@ function LaneCard({
                 style={
                   on
                     ? { background: lane.color, borderColor: lane.color }
-                    : isToday
-                      ? { borderColor: 'var(--color-tape)' }
-                      : undefined
+                    : cheat
+                      ? { borderColor: CHEAT_COLOR }
+                      : isToday
+                        ? { borderColor: 'var(--color-tape)' }
+                        : undefined
                 }
               >
                 <span>{label}</span>
                 <span aria-hidden="true" className="text-base leading-none">
-                  {on ? '✓' : '·'}
+                  {on ? '✓' : cheat ? '🍕' : '·'}
                 </span>
               </button>
             );
@@ -169,8 +178,113 @@ function LaneCard({
   );
 }
 
+/**
+ * Der Cheat Day ist die Notbremse der Ernährung: ein Tag pro Woche, an dem
+ * nichts zählt — weder als sauberer Tag noch als Ausrutscher. Bewusst gesetzt
+ * statt automatisch verrechnet, damit die Entscheidung sichtbar bleibt.
+ */
+function CheatCard({
+  picked,
+  weekKey,
+  today,
+  toggleCheat,
+}: {
+  picked: string | null;
+  weekKey: string;
+  today: string;
+  toggleCheat: Tracker['toggleCheat'];
+}) {
+  const weekDates = DAYS.map((_, i) => addDays(weekKey, i));
+
+  return (
+    <section
+      className="chalk-edge chalk-dust relative overflow-hidden rounded-2xl border bg-rock-900/80"
+      style={{ borderColor: picked ? CHEAT_COLOR : 'var(--color-rock-700)' }}
+    >
+      <div
+        aria-hidden="true"
+        className="absolute inset-x-0 top-0 h-1"
+        style={{ background: CHEAT_COLOR, opacity: picked ? 1 : 0.45 }}
+      />
+
+      <div className="flex items-start gap-3 p-4 pt-5">
+        <span className="mt-0.5 shrink-0 text-2xl leading-none" aria-hidden="true">
+          🍕
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            <span
+              className="rounded-full px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wider"
+              style={{
+                background: `color-mix(in srgb, ${CHEAT_COLOR} 22%, transparent)`,
+                color: CHEAT_COLOR,
+              }}
+            >
+              {CHEAT_PER_WEEK}× pro Woche
+            </span>
+            <h2 className="font-display text-2xl uppercase leading-none">Cheat Day</h2>
+          </div>
+          <p className="mt-1 text-sm text-chalk-dim">
+            {picked
+              ? `${weekdayLabel(picked)}, ${shortDate(picked)} zählt nicht — deine Serien laufen weiter.`
+              : 'Ein Tag pro Woche, an dem die Ernährung nicht zählt. Die Serie bricht nicht.'}
+          </p>
+        </div>
+        <span className="shrink-0 font-display text-2xl leading-none tabular-nums">
+          {picked ? 1 : 0}
+          <span className="text-chalk-faint">/{CHEAT_PER_WEEK}</span>
+        </span>
+      </div>
+
+      <div className="px-4 pb-4">
+        <div className="grid grid-cols-7 gap-1.5">
+          {DAYS.map((label, i) => {
+            const date = weekDates[i];
+            const on = date === picked;
+            // Die Zukunft bleibt offen, und ist der Tag vergeben, führt nur der
+            // Weg über den gesetzten Tag zurück — sonst wären es zwei Klicks
+            // ins Leere.
+            const disabled = date > today || (picked !== null && !on);
+            return (
+              <button
+                key={date}
+                type="button"
+                disabled={disabled}
+                onClick={() => toggleCheat(date)}
+                aria-pressed={on}
+                aria-label={`${weekdayLabel(date)}, ${shortDate(date)} — Cheat Day${on ? ' ✓' : ''}`}
+                className={`flex flex-col items-center gap-1 rounded-xl border px-1 py-2.5 text-xs font-semibold transition active:scale-[0.96] disabled:cursor-not-allowed disabled:opacity-35 ${
+                  on ? 'text-rock-950' : 'border-rock-700 bg-rock-850 text-chalk-dim hover:border-rock-500'
+                }`}
+                style={
+                  on
+                    ? { background: CHEAT_COLOR, borderColor: CHEAT_COLOR }
+                    : date === today
+                      ? { borderColor: 'var(--color-tape)' }
+                      : undefined
+                }
+              >
+                <span>{label}</span>
+                <span aria-hidden="true" className="text-base leading-none">
+                  {on ? '🍕' : '·'}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        <p className="mt-2.5 text-xs text-chalk-faint">
+          {picked
+            ? 'Nochmal antippen nimmt ihn zurück — dann ist die Woche wieder frei.'
+            : 'Der Tag bringt keine XP, er hält nur die Serie am Leben. Am Montag gibt es einen neuen.'}
+        </p>
+      </div>
+    </section>
+  );
+}
+
 export function NutritionView({ tracker }: { tracker: Tracker }) {
-  const { stats, toggleClean } = tracker;
+  const { stats, toggleClean, toggleCheat } = tracker;
   const today = toISODate(new Date());
   const weekKey = currentWeekKey();
   const start = addWeeks(weekKey, -(HISTORY_WEEKS - 1));
@@ -214,11 +328,19 @@ export function NutritionView({ tracker }: { tracker: Tracker }) {
           key={lane.kind}
           lane={lane}
           stats={stats.lanes[lane.kind]}
+          cheatDates={stats.cheatDates}
           weekKey={weekKey}
           today={today}
           toggleClean={toggleClean}
         />
       ))}
+
+      <CheatCard
+        picked={stats.cheatThisWeek}
+        weekKey={weekKey}
+        today={today}
+        toggleCheat={toggleCheat}
+      />
 
       <section className="chalk-edge rounded-2xl border border-rock-700 bg-rock-900/80 p-4">
         <h2 className="font-display text-xl uppercase">Letzte {HISTORY_WEEKS} Wochen</h2>
@@ -247,6 +369,7 @@ export function NutritionView({ tracker }: { tracker: Tracker }) {
                     DAYS.map((_, i) => {
                       const date = addDays(wk, i);
                       const on = dates.has(date);
+                      const cheat = stats.cheatDates.has(date);
                       const future = date > today;
                       return (
                         <button
@@ -256,17 +379,21 @@ export function NutritionView({ tracker }: { tracker: Tracker }) {
                           onClick={() => toggleClean(date, lane.kind)}
                           aria-pressed={on}
                           aria-label={`${weekdayLabel(date)}, ${shortDate(date)} — ${lane.title}${
-                            on ? ' ✓' : ''
+                            on ? ' ✓' : cheat ? ' (Cheat Day)' : ''
                           }`}
-                          title={`${weekdayLabel(date)}, ${shortDate(date)}`}
+                          title={`${weekdayLabel(date)}, ${shortDate(date)}${
+                            cheat ? ' — Cheat Day' : ''
+                          }`}
                           className="aspect-square rounded-[5px] border transition disabled:cursor-not-allowed"
                           style={{
                             background: on ? lane.color : 'var(--color-rock-800)',
                             borderColor: on
                               ? 'transparent'
-                              : date === today
-                                ? 'var(--color-tape)'
-                                : 'var(--color-rock-700)',
+                              : cheat
+                                ? CHEAT_COLOR
+                                : date === today
+                                  ? 'var(--color-tape)'
+                                  : 'var(--color-rock-700)',
                             opacity: future ? 0.25 : 1,
                           }}
                         />
@@ -295,6 +422,10 @@ export function NutritionView({ tracker }: { tracker: Tracker }) {
           <li>
             Ein Ausrutscher setzt nur den Zähler zurück — verdiente XP bleiben. {XP_PER_LEVEL} XP
             sind ein Level.
+          </li>
+          <li>
+            <span className="text-chalk">Cheat Day:</span> {CHEAT_PER_WEEK}× pro Woche ein Tag, der
+            übersprungen wird. Keine XP, aber die Serie läuft weiter.
           </li>
         </ul>
       </section>

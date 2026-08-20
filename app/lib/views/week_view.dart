@@ -46,7 +46,11 @@ class WeekView extends StatelessWidget {
         ],
         _Summary(stats: stats, week: week, weekKey: key, count: count, status: status),
         const SizedBox(height: 16),
-        NutritionCard(stats: stats, toggleClean: store.toggleClean),
+        NutritionCard(
+          stats: stats,
+          toggleClean: store.toggleClean,
+          toggleCheat: store.toggleCheat,
+        ),
         const SizedBox(height: 16),
         WalkCard(week: week, toggleWalk: store.toggleWalk, walkStreak: stats.walkStreak),
         const SizedBox(height: 16),

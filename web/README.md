@@ -48,6 +48,13 @@ Zähler zurück, verdiente XP bleiben; das Ziel ist Weitermachen, nicht Perfekti
 Wochenziel sind 7 von 7 Tagen in beiden Spuren. Vergangene Tage lassen sich
 nachtragen, künftige nicht.
 
+**Cheat Day:** einmal pro Woche (Mo–So) lässt sich ein Tag von Hand als Cheat Day
+markieren. Er wird bei der Ernährung übersprungen wie ein Pausentag — die Serien
+laufen darüber hinweg, statt zu brechen. XP bringt er keine, und als sauberer Tag
+zählt er auch nicht: eine 7/7-Woche ist mit Cheat Day also nicht drin. Ein zweiter
+Tap nimmt ihn zurück, danach ist die Woche wieder frei. Auf Training,
+Spaziergänge und Treppe hat er keinen Einfluss.
+
 **Level:** alle 150 XP eins rauf, mit kleiner Animation. Einheiten, Spaziergänge
 und saubere Tage zahlen auf dasselbe XP-Konto ein. Eine perfekte Woche —
 2 Einheiten, 5 Spaziergänge, 7 saubere Tage in beiden Spuren — sind gut 160 XP,
@@ -84,13 +91,15 @@ Bedingungen werden aus den vorhandenen Einträgen berechnet — auch rückwirken
    Wochenziel-Ring, Streak, Level und XP-Balken, dazu die drei Wochenziele
    (Training / Spaziergänge / Sauber) nebeneinander. Jede Einheit lässt sich
    aufklappen: Übungsliste als optionale Checkliste plus Timer für Plank/Runden.
-   Darüber die Tageskarte *Heute sauber?* mit den zwei Ernährungs-Schaltern,
+   Darüber die Tageskarte *Heute sauber?* mit den zwei Ernährungs-Schaltern und
+   dem Cheat-Day-Knopf für heute,
    darunter die Spaziergangs-Karte mit einer Reihe Mo–So: antippen hakt den Tag ab,
    nochmal antippen nimmt ihn zurück. Vergangene Tage lassen sich nachtragen,
    künftige nicht.
 2. **Ernährung** — pro Spur eine Karte mit der Woche Mo–So, der aktuellen Serie und
-   einer Leiter, die zeigt, was der nächste Tag wert ist. Darunter die letzten
-   8 Wochen als Kalender zum Nachtragen und eine kurze Erklärung der Punkte.
+   einer Leiter, die zeigt, was der nächste Tag wert ist. Darunter die Cheat-Day-Karte
+   (eine Woche Mo–So, ein Tag wählbar), die letzten 8 Wochen als Kalender zum
+   Nachtragen und eine kurze Erklärung der Punkte.
 3. **Verlauf** — Heatmap über die Wochen (Contribution-Graph-Stil), ein Raster der
    Werktage mit Spaziergang, eine Zeile pro Ernährungs-Spur, Statistiken und
    Export/Import/Zurücksetzen der Daten.
@@ -271,6 +280,13 @@ In der App geht es auch ohne Shell: Verlauf → *Daten* → **Export (JSON)** l�
       "id": "m2x4k3-1b8ee0",
       "date": "2026-07-20",  // ein Eintrag pro Tag und Spur
       "kind": "snacks",      // "snacks" | "drinks"
+      "ts": 1753000000000
+    }
+  ],
+  "cheatDays": [
+    {
+      "id": "m2x4k4-6d21af",
+      "date": "2026-07-25",  // höchstens einer pro Woche
       "ts": 1753000000000
     }
   ],

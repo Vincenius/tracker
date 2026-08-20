@@ -124,6 +124,9 @@ class DayToggle extends StatelessWidget {
     this.disabled = false,
     this.muted = false,
     this.semantics,
+    this.onMark = '✓',
+    this.offMark = '·',
+    this.offBorder,
   });
 
   final String label;
@@ -137,15 +140,23 @@ class DayToggle extends StatelessWidget {
   final bool muted;
   final String? semantics;
 
+  /// Zeichen im abgehakten bzw. offenen Zustand — der Cheat Day nutzt 🍕.
+  final String onMark;
+  final String offMark;
+
+  /// Rand für einen offenen Tag, der trotzdem etwas bedeutet (Cheat Day).
+  final Color? offBorder;
+
   @override
   Widget build(BuildContext context) {
     final border = on
         ? color
-        : today
-            ? C.tape
-            : muted
-                ? C.rock800
-                : C.rock700;
+        : offBorder ??
+            (today
+                ? C.tape
+                : muted
+                    ? C.rock800
+                    : C.rock700);
     return Semantics(
       label: semantics,
       toggled: on,
@@ -184,7 +195,7 @@ class DayToggle extends StatelessWidget {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    on ? '✓' : '·',
+                    on ? onMark : offMark,
                     style: TextStyle(
                       fontSize: 16,
                       height: 1,

@@ -146,6 +146,27 @@ class Stair {
   Map<String, Object?> toJson() => {'id': id, 'date': date, 'ts': ts};
 }
 
+/// Ein selbst gewählter Cheat Day: ein Tag, an dem die Ernährung nicht zählt.
+class CheatDay {
+  const CheatDay({required this.id, required this.date, required this.ts});
+
+  final String id;
+  final String date;
+  final int ts;
+
+  static CheatDay? fromJson(Object? raw) {
+    if (raw is! Map) return null;
+    if (raw['id'] is! String || raw['date'] is! String || raw['ts'] is! num) return null;
+    return CheatDay(
+      id: raw['id'] as String,
+      date: raw['date'] as String,
+      ts: (raw['ts'] as num).toInt(),
+    );
+  }
+
+  Map<String, Object?> toJson() => {'id': id, 'date': date, 'ts': ts};
+}
+
 enum PauseAction { start, stop }
 
 /// Pausenmodus als Ereignis-Paar: 'start' öffnet eine Pause, 'stop' schließt sie.
@@ -185,6 +206,7 @@ class AppData {
     this.walks = const [],
     this.cleanDays = const [],
     this.stairs = const [],
+    this.cheatDays = const [],
     this.pauses = const [],
     this.seenBadges = const [],
     this.seenLevel = 1,
@@ -195,6 +217,7 @@ class AppData {
   final List<Walk> walks;
   final List<CleanDay> cleanDays;
   final List<Stair> stairs;
+  final List<CheatDay> cheatDays;
   final List<PauseEvent> pauses;
 
   /// Bereits gefeierte Badges – verhindert doppelte Animationen
@@ -213,6 +236,7 @@ class AppData {
     List<Walk>? walks,
     List<CleanDay>? cleanDays,
     List<Stair>? stairs,
+    List<CheatDay>? cheatDays,
     List<PauseEvent>? pauses,
     List<String>? seenBadges,
     int? seenLevel,
@@ -223,6 +247,7 @@ class AppData {
         walks: walks ?? this.walks,
         cleanDays: cleanDays ?? this.cleanDays,
         stairs: stairs ?? this.stairs,
+        cheatDays: cheatDays ?? this.cheatDays,
         pauses: pauses ?? this.pauses,
         seenBadges: seenBadges ?? this.seenBadges,
         seenLevel: seenLevel ?? this.seenLevel,
@@ -235,6 +260,7 @@ class AppData {
         'walks': [for (final w in walks) w.toJson()],
         'cleanDays': [for (final c in cleanDays) c.toJson()],
         'stairs': [for (final s in stairs) s.toJson()],
+        'cheatDays': [for (final c in cheatDays) c.toJson()],
         'pauses': [for (final p in pauses) p.toJson()],
         'seenBadges': seenBadges,
         'seenLevel': seenLevel,

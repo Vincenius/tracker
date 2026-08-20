@@ -50,6 +50,18 @@ export interface Stair {
 }
 
 /**
+ * Ein selbst gewählter Cheat Day: ein Tag, an dem die Ernährung nicht zählt.
+ * Wie alles andere unveränderlich mit eigener ID, damit der Sync ihn ohne
+ * Sonderfälle mergen kann.
+ */
+export interface CheatDay {
+  id: string;
+  /** ISO-Datum, z.B. 2026-07-20 */
+  date: string;
+  ts: number;
+}
+
+/**
  * Pausenmodus als Ereignis-Paar: 'start' öffnet eine Pause, 'stop' schließt
  * sie. Ereignisse sind unveränderlich mit eigener ID — der Sync merged sie wie
  * alles andere per Vereinigung, der Zustand ergibt sich aus der Reihenfolge.
@@ -68,6 +80,7 @@ export interface AppData {
   walks: Walk[];
   cleanDays: CleanDay[];
   stairs: Stair[];
+  cheatDays: CheatDay[];
   pauses: PauseEvent[];
   /** Bereits gefeierte Badges – verhindert doppelte Animationen */
   seenBadges: string[];

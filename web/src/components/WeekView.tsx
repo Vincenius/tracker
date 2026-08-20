@@ -44,6 +44,7 @@ export function WeekView({ tracker }: { tracker: Tracker }) {
     removeSession,
     toggleWalk,
     toggleClean,
+    toggleCheat,
     addStair,
     removeStair,
     togglePause,
@@ -173,7 +174,7 @@ export function WeekView({ tracker }: { tracker: Tracker }) {
         </div>
       </section>
 
-      <NutritionCard stats={stats} toggleClean={toggleClean} />
+      <NutritionCard stats={stats} toggleClean={toggleClean} toggleCheat={toggleCheat} />
 
       <WalkCard week={week} toggleWalk={toggleWalk} walkStreak={stats.walkStreak} />
 

@@ -1,4 +1,3 @@
-import { cheatInfo } from './cheat';
 import {
   addDays,
   addWeeks,
@@ -12,25 +11,15 @@ import {
 } from './date';
 import { pauseInfo } from './pause';
 import type {
-  CheatDay,
-  CleanDay,
-  CleanKind,
   PauseEvent,
   Session,
   SessionType,
   Stair,
+  Treat,
+  TreatKind,
   Walk,
 } from './types';
-import {
-  CLEAN_KINDS,
-  WALK_GOAL,
-  XP_CLEAN_COMBO,
-  XP_PER_LEVEL,
-  XP_STAIR,
-  XP_WALK,
-  xpFor,
-  xpForCleanDay,
-} from './types';
+import { TREAT_KINDS, WALK_GOAL, XP_PER_LEVEL, XP_STAIR, XP_TREAT, XP_WALK, xpFor } from './types';
 import { WORKOUTS } from './workouts';
 
 /** Wurde beim Abhaken die komplette Übungsliste mit abgehakt? */
@@ -44,16 +33,22 @@ function isFullyChecked(s: Session): boolean {
 export const CLEAN_GOAL = 7;
 
 export interface LaneStats {
-  kind: CleanKind;
-  /** Alle sauberen Tage dieser Spur */
-  dates: Set<string>;
+  kind: TreatKind;
+  /** Einträge je Tag */
+  perDay: Map<string, number>;
+  /** Einträge insgesamt */
   total: number;
-  /** Laufende Serie; der heutige Tag bricht sie nicht, solange er läuft */
-  currentStreak: number;
-  longestStreak: number;
-  /** XP, die der nächste saubere Tag in dieser Spur bringt */
-  nextXp: number;
-  xp: number;
+  /** Einträge heute */
+  today: number;
+  /** Tage mit mindestens einem Eintrag */
+  days: number;
+  /** meiste Einträge an einem Tag */
+  worstDay: number;
+  /** laufende Serie an Tagen ohne Eintrag in dieser Spur */
+  cleanStreak: number;
+  longestCleanStreak: number;
+  /** XP, die diese Spur gekostet hat */
+  xpLost: number;
 }
 
 export interface WeekSummary {
@@ -68,12 +63,16 @@ export interface WeekSummary {
   walkDays: number;
   /** alle fünf Werktage mit Spaziergang */
   walkPerfect: boolean;
-  clean: CleanDay[];
-  /** saubere Tage je Spur in dieser Woche */
-  cleanDays: Record<CleanKind, number>;
-  /** Tage, an denen beide Spuren sauber waren */
-  cleanBothDays: number;
-  /** alle sieben Tage in beiden Spuren sauber */
+  treats: Treat[];
+  /** Einträge dieser Woche, je Spur */
+  treatsByKind: Record<TreatKind, number>;
+  /** Einträge dieser Woche insgesamt */
+  treatCount: number;
+  /** Tage dieser Woche mit mindestens einem Eintrag */
+  treatDays: number;
+  /** vergangene Tage dieser Woche ganz ohne Eintrag */
+  cleanDays: number;
+  /** die ganze Woche ohne einen einzigen Eintrag */
   cleanPerfect: boolean;
   stairs: Stair[];
   /** Treppenaufstiege in dieser Woche — jeder einzelne zählt */
@@ -128,23 +127,31 @@ export interface Stats {
   /** Wochen, in denen sowohl Trainings- als auch Spaziergangsziel erfüllt wurden */
   doubleGoalWeeks: number;
 
-  // ——— Ernährung ———
-  lanes: Record<CleanKind, LaneStats>;
-  /** Tage, an denen beide Spuren sauber waren */
-  cleanBothDays: number;
-  /** laufende Serie an Tagen mit beiden Spuren sauber */
-  cleanBothStreak: number;
-  longestCleanBothStreak: number;
-  /** Serien von 7 vollen Tagen nach einem Ausrutscher */
+  // ——— Ernährung: gezählt wird, was danebenging ———
+  lanes: Record<TreatKind, LaneStats>;
+  /** Einträge insgesamt (beide Spuren) */
+  treatTotal: number;
+  /** Einträge heute */
+  treatToday: number;
+  /** Tage mit mindestens einem Eintrag */
+  treatDays: number;
+  /** meiste Einträge an einem Tag */
+  treatWorstDay: number;
+  /** XP, die die Ernährung insgesamt gekostet hat */
+  treatXpLost: number;
+  /** laufende Serie an Tagen ganz ohne Eintrag */
+  cleanStreak: number;
+  longestCleanStreak: number;
+  /** getrackte Tage ganz ohne Eintrag */
+  cleanDayTotal: number;
+  /** Serien von 7 sauberen Tagen nach einem Ausrutscher */
   cleanComebacks: number;
-  /** Tage, an denen mindestens eine Spur sauber war */
-  cleanAnyDays: number;
-  /** XP aus der Ernährung insgesamt */
-  cleanXp: number;
-  /** Wochen mit 7/7 in beiden Spuren */
+  /** Wochen ganz ohne Eintrag */
   cleanPerfectWeeks: number;
-  /** Wochen mit Trainingsziel, allen Spaziergängen und einer perfekten Ernährungswoche */
+  /** Wochen mit Trainingsziel, allen Spaziergängen und ohne einen Ausrutscher */
   tripleGoalWeeks: number;
+  /** Erster Tag mit irgendeinem Eintrag — davor wird nichts gewertet */
+  trackedSince: string | null;
 
   // ——— Treppe ———
   /** Treppenaufstiege insgesamt */
@@ -158,14 +165,6 @@ export interface Stats {
   /** laufende Serie an Tagen mit mindestens einem Aufstieg */
   stairStreak: number;
   longestStairStreak: number;
-
-  // ——— Cheat Days ———
-  /** Gesetzte Cheat-Tage — je Woche zählt nur einer */
-  cheatDates: Set<string>;
-  /** Cheat Day der laufenden Woche — null, wenn noch keiner gesetzt ist */
-  cheatThisWeek: string | null;
-  /** Cheat-Tage insgesamt */
-  cheatTotal: number;
 
   // ——— Pausenmodus ———
   /** Pause läuft: Streaks frieren ein, Einträge zählen trotzdem */
@@ -188,24 +187,6 @@ function joins(prev: string | null, date: string, paused: Set<string>): boolean 
   return d === date;
 }
 
-/** XP pro Tag einer Spur — der wievielte Tag der Serie zählt, nicht der Kalendertag. */
-function laneXpByDate(
-  dates: Set<string>,
-  paused: Set<string>,
-): { xp: Map<string, number>; longest: number } {
-  const xp = new Map<string, number>();
-  let longest = 0;
-  let run = 0;
-  let prev: string | null = null;
-  for (const date of [...dates].sort()) {
-    run = joins(prev, date, paused) ? run + 1 : 1;
-    if (run > longest) longest = run;
-    xp.set(date, xpForCleanDay(run));
-    prev = date;
-  }
-  return { xp, longest };
-}
-
 /**
  * Serie rückwärts ab heute. Ein noch nicht abgehakter heutiger Tag bricht sie
  * nicht — und pausierte Tage ohne Eintrag werden übersprungen.
@@ -221,13 +202,55 @@ function streakBack(dates: Set<string>, today: string, paused: Set<string>): num
   return streak;
 }
 
+export interface CleanScan {
+  /** Alle sauberen Tage — getrackt, nicht pausiert, ohne Eintrag */
+  dates: Set<string>;
+  /** Laufende Serie bis heute */
+  current: number;
+  longest: number;
+  /** Wie oft eine Serie die 7 Tage erreicht hat */
+  sevens: number;
+}
+
+/**
+ * Sauber ist ein Tag, an dem *nichts* eingetragen wurde — die Serie ergibt
+ * sich also aus dem Ausbleiben von Einträgen. Damit das nicht rückwirkend bis
+ * zum Urknall gilt, zählt erst ab dem ersten getrackten Tag. Pausierte Tage
+ * werden übersprungen: sie zählen nicht mit, brechen aber auch nichts.
+ */
+function cleanScan(
+  treatDates: Set<string>,
+  from: string | null,
+  today: string,
+  paused: Set<string>,
+): CleanScan {
+  const dates = new Set<string>();
+  let current = 0;
+  let longest = 0;
+  let sevens = 0;
+  if (!from || from > today) return { dates, current, longest, sevens };
+  let guard = 0;
+  for (let d = from; d <= today && guard++ < 20000; d = addDays(d, 1)) {
+    if (paused.has(d)) continue;
+    if (treatDates.has(d)) {
+      current = 0;
+      continue;
+    }
+    dates.add(d);
+    current++;
+    if (current > longest) longest = current;
+    if (current === CLEAN_GOAL) sevens++;
+  }
+  return { dates, current, longest, sevens };
+}
+
 export function summarizeWeek(
   key: string,
   sessions: Session[],
   walks: Walk[] = [],
-  clean: CleanDay[] = [],
-  cleanXpByDate: Map<string, number> = new Map(),
+  treats: Treat[] = [],
   stairs: Stair[] = [],
+  cleanDates: Set<string> = new Set(),
 ): WeekSummary {
   const count = sessions.length;
   const has = (t: SessionType) => sessions.some((s) => s.type === t);
@@ -239,16 +262,12 @@ export function summarizeWeek(
   const dates = new Set(walks.map((w) => w.date));
   const walkDays = [...dates].filter(isWeekday).length;
 
-  const cleanSets: Record<CleanKind, Set<string>> = { snacks: new Set(), drinks: new Set() };
-  for (const c of clean) cleanSets[c.kind].add(c.date);
-  const cleanDays = { snacks: cleanSets.snacks.size, drinks: cleanSets.drinks.size };
-  const cleanBothDays = [...cleanSets.snacks].filter((d) => cleanSets.drinks.has(d)).length;
-
-  // Ernährungs-XP hängt an der Serie über Wochengrenzen hinweg und kommt
-  // deshalb fertig berechnet von computeStats.
-  const weekDates = new Set([...cleanSets.snacks, ...cleanSets.drinks]);
-  let cleanXp = 0;
-  for (const d of weekDates) cleanXp += cleanXpByDate.get(d) ?? 0;
+  const treatsByKind: Record<TreatKind, number> = { sweets: 0, drinks: 0 };
+  for (const t of treats) treatsByKind[t.kind]++;
+  const weekDays = [0, 1, 2, 3, 4, 5, 6].map((i) => addDays(key, i));
+  // Saubere Tage kommen fertig gerechnet von computeStats: ob ein Tag zählt,
+  // hängt am Trackingstart, am heutigen Datum und am Pausenmodus.
+  const cleanDays = weekDays.filter((d) => cleanDates.has(d)).length;
 
   return {
     key,
@@ -259,27 +278,28 @@ export function summarizeWeek(
     walks,
     walkDays,
     walkPerfect: walkDays >= WALK_GOAL,
-    clean,
+    treats,
+    treatsByKind,
+    treatCount: treats.length,
+    treatDays: new Set(treats.map((t) => t.date)).size,
     cleanDays,
-    cleanBothDays,
-    cleanPerfect: cleanBothDays >= CLEAN_GOAL,
+    cleanPerfect: cleanDays >= CLEAN_GOAL,
     stairs,
     stairCount: stairs.length,
     xp:
       sessions.reduce((sum, s) => sum + xpFor(s), 0) +
       dates.size * XP_WALK +
-      stairs.length * XP_STAIR +
-      cleanXp,
+      stairs.length * XP_STAIR -
+      treats.length * XP_TREAT,
   };
 }
 
 export function computeStats(
   sessions: Session[],
   walks: Walk[] = [],
-  cleanDaysInput: CleanDay[] = [],
+  treatsInput: Treat[] = [],
   stairs: Stair[] = [],
   pauseEvents: PauseEvent[] = [],
-  cheatDays: CheatDay[] = [],
   now = new Date(),
 ): Stats {
   const buckets = new Map<string, Session[]>();
@@ -298,12 +318,12 @@ export function computeStats(
     else walkBuckets.set(k, [w]);
   }
 
-  const cleanBuckets = new Map<string, CleanDay[]>();
-  for (const c of cleanDaysInput) {
-    const k = weekKeyOf(c.date);
-    const arr = cleanBuckets.get(k);
-    if (arr) arr.push(c);
-    else cleanBuckets.set(k, [c]);
+  const treatBuckets = new Map<string, Treat[]>();
+  for (const t of treatsInput) {
+    const k = weekKeyOf(t.date);
+    const arr = treatBuckets.get(k);
+    if (arr) arr.push(t);
+    else treatBuckets.set(k, [t]);
   }
 
   const stairBuckets = new Map<string, Stair[]>();
@@ -322,71 +342,64 @@ export function computeStats(
   const weekPaused = (key: string) =>
     [0, 1, 2, 3, 4, 5, 6].some((i) => paused.has(addDays(key, i)));
 
-  // ——— Cheat Days: übersprungen wie Pausentage, aber nur bei der Ernährung.
-  // Training, Spaziergang und Treppe interessiert der Cheat Day nicht.
-  const cheat = cheatInfo(cheatDays);
-  const cleanSkip = new Set([...paused, ...cheat.dates]);
+  // Der erste Tag, an dem überhaupt etwas eingetragen wurde. Vorher gibt es
+  // keine sauberen Tage — sonst wäre jede frisch installierte App im Rekord.
+  let trackedSince: string | null = null;
+  for (const date of [
+    ...sessions.map((s) => s.date),
+    ...walks.map((w) => w.date),
+    ...treatsInput.map((t) => t.date),
+    ...stairs.map((s) => s.date),
+  ]) {
+    if (!trackedSince || date < trackedSince) trackedSince = date;
+  }
 
-  // ——— Ernährung: erst die Serien, daraus die XP pro Tag ———
-  const laneDates: Record<CleanKind, Set<string>> = { snacks: new Set(), drinks: new Set() };
-  for (const c of cleanDaysInput) laneDates[c.kind].add(c.date);
+  // ——— Ernährung: gezählt wird, was danebenging ———
+  const lanePerDay: Record<TreatKind, Map<string, number>> = {
+    sweets: new Map(),
+    drinks: new Map(),
+  };
+  const treatPerDay = new Map<string, number>();
+  for (const t of treatsInput) {
+    const lane = lanePerDay[t.kind];
+    lane.set(t.date, (lane.get(t.date) ?? 0) + 1);
+    treatPerDay.set(t.date, (treatPerDay.get(t.date) ?? 0) + 1);
+  }
 
-  const bothDates = [...laneDates.snacks].filter((d) => laneDates.drinks.has(d)).sort();
-  const bothSet = new Set(bothDates);
-
-  /** XP je Kalendertag über beide Spuren inkl. Kombi-Bonus — für die Wochen-XP. */
-  const cleanXpByDate = new Map<string, number>();
-  const lanes = {} as Record<CleanKind, LaneStats>;
-  let cleanXp = 0;
-
-  for (const kind of CLEAN_KINDS) {
-    const dates = laneDates[kind];
-    const { xp: byDate, longest } = laneXpByDate(dates, cleanSkip);
-    const currentStreak = streakBack(dates, today, cleanSkip);
-    let laneXp = 0;
-    for (const [date, value] of byDate) {
-      laneXp += value;
-      cleanXpByDate.set(date, (cleanXpByDate.get(date) ?? 0) + value);
+  const lanes = {} as Record<TreatKind, LaneStats>;
+  for (const kind of TREAT_KINDS) {
+    const perDay = lanePerDay[kind];
+    const scan = cleanScan(new Set(perDay.keys()), trackedSince, today, paused);
+    let total = 0;
+    let worstDay = 0;
+    for (const n of perDay.values()) {
+      total += n;
+      if (n > worstDay) worstDay = n;
     }
-    cleanXp += laneXp;
     lanes[kind] = {
       kind,
-      dates,
-      total: dates.size,
-      currentStreak,
-      longestStreak: Math.max(longest, currentStreak),
-      // Der nächste Tag setzt die Serie fort — also ein Schritt weiter.
-      nextXp: xpForCleanDay(currentStreak + 1),
-      xp: laneXp,
+      perDay,
+      total,
+      today: perDay.get(today) ?? 0,
+      days: perDay.size,
+      worstDay,
+      cleanStreak: scan.current,
+      longestCleanStreak: scan.longest,
+      xpLost: total * XP_TREAT,
     };
   }
 
-  for (const date of bothDates) {
-    cleanXp += XP_CLEAN_COMBO;
-    cleanXpByDate.set(date, (cleanXpByDate.get(date) ?? 0) + XP_CLEAN_COMBO);
-  }
-
-  const cleanBothStreak = streakBack(bothSet, today, cleanSkip);
-  let longestCleanBothStreak = 0;
-  // Serien ab einer Woche zählen; ab der zweiten ist jede ein Wiedereinstieg
-  // nach einem Ausrutscher.
-  let longRuns = 0;
-  let bothRun = 0;
-  let prevBoth: string | null = null;
-  for (const date of bothDates) {
-    bothRun = joins(prevBoth, date, cleanSkip) ? bothRun + 1 : 1;
-    if (bothRun > longestCleanBothStreak) longestCleanBothStreak = bothRun;
-    if (bothRun === CLEAN_GOAL) longRuns++;
-    prevBoth = date;
-  }
-  longestCleanBothStreak = Math.max(longestCleanBothStreak, cleanBothStreak);
-  const cleanComebacks = Math.max(0, longRuns - 1);
+  const clean = cleanScan(new Set(treatPerDay.keys()), trackedSince, today, paused);
+  // Die erste 7er-Serie ist der Normalfall; jede weitere folgt auf einen
+  // Ausrutscher — genau das ist der Wiedereinstieg.
+  const cleanComebacks = Math.max(0, clean.sevens - 1);
+  const treatXpLost = treatsInput.length * XP_TREAT;
 
   const thisWeek = currentWeekKey(now);
   const keys = [
     ...buckets.keys(),
     ...walkBuckets.keys(),
-    ...cleanBuckets.keys(),
+    ...treatBuckets.keys(),
     ...stairBuckets.keys(),
   ].sort();
   const first = keys[0] ?? thisWeek;
@@ -399,9 +412,9 @@ export function computeStats(
       k,
       (buckets.get(k) ?? []).slice().sort((a, b) => a.ts - b.ts),
       (walkBuckets.get(k) ?? []).slice().sort((a, b) => a.ts - b.ts),
-      (cleanBuckets.get(k) ?? []).slice().sort((a, b) => a.ts - b.ts),
-      cleanXpByDate,
+      (treatBuckets.get(k) ?? []).slice().sort((a, b) => a.ts - b.ts),
       (stairBuckets.get(k) ?? []).slice().sort((a, b) => a.ts - b.ts),
+      clean.dates,
     );
     weeks.set(k, w);
     orderedWeeks.push(w);
@@ -426,7 +439,7 @@ export function computeStats(
   }
 
   const byType: Record<SessionType, number> = { boulder: 0, home: 0, fallback: 0 };
-  let xp = cleanXp;
+  let earned = 0;
   let earlyBird = 0;
   let nightOwl = 0;
   let weekendSessions = 0;
@@ -434,7 +447,7 @@ export function computeStats(
   let fullChecklists = 0;
   for (const s of sessions) {
     byType[s.type]++;
-    xp += xpFor(s);
+    earned += xpFor(s);
     const hour = new Date(s.ts).getHours();
     if (hour < 9) earlyBird++;
     if (hour >= 21) nightOwl++;
@@ -446,7 +459,7 @@ export function computeStats(
 
   // ——— Spaziergänge ———
   const walkDates = new Set(walks.map((w) => w.date));
-  xp += walkDates.size * XP_WALK;
+  earned += walkDates.size * XP_WALK;
   const weekdayWalks = [...walkDates].filter(isWeekday);
   const weekendWalks = walkDates.size - weekdayWalks.length;
 
@@ -482,7 +495,7 @@ export function computeStats(
   const stairPerDay = new Map<string, number>();
   for (const s of stairs) stairPerDay.set(s.date, (stairPerDay.get(s.date) ?? 0) + 1);
   const stairDates = new Set(stairPerDay.keys());
-  xp += stairs.length * XP_STAIR;
+  earned += stairs.length * XP_STAIR;
 
   const stairStreak = streakBack(stairDates, today, paused);
   let longestStairStreak = 0;
@@ -521,6 +534,9 @@ export function computeStats(
     emptyRun = w.count === 0 ? emptyRun + 1 : 0;
   }
 
+  // Unter null geht es nicht: ein schlechter Monat kostet Fortschritt, aber
+  // niemals das Konto.
+  const xp = Math.max(0, earned - treatXpLost);
   const level = Math.floor(xp / XP_PER_LEVEL) + 1;
 
   return {
@@ -554,23 +570,24 @@ export function computeStats(
     longestWalkStreak,
     doubleGoalWeeks,
     lanes,
-    cleanBothDays: bothDates.length,
-    cleanBothStreak,
-    longestCleanBothStreak,
+    treatTotal: treatsInput.length,
+    treatToday: treatPerDay.get(today) ?? 0,
+    treatDays: treatPerDay.size,
+    treatWorstDay: Math.max(0, ...treatPerDay.values()),
+    treatXpLost,
+    cleanStreak: clean.current,
+    longestCleanStreak: clean.longest,
+    cleanDayTotal: clean.dates.size,
     cleanComebacks,
-    cleanAnyDays: new Set([...laneDates.snacks, ...laneDates.drinks]).size,
-    cleanXp,
     cleanPerfectWeeks,
     tripleGoalWeeks,
+    trackedSince,
     stairTotal: stairs.length,
     stairToday: stairPerDay.get(today) ?? 0,
     stairDays: stairDates.size,
     stairBestDay: Math.max(0, ...stairPerDay.values()),
     stairStreak,
     longestStairStreak,
-    cheatDates: cheat.dates,
-    cheatThisWeek: cheat.byWeek.get(thisWeek) ?? null,
-    cheatTotal: cheat.dates.size,
     pauseActive: activeSince !== null,
     pausedSince: activeSince,
   };

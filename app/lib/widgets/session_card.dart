@@ -5,6 +5,7 @@ import '../core/types.dart';
 import '../core/workouts.dart';
 import '../theme.dart';
 import 'card.dart';
+import 'confetti.dart';
 import 'exercise_timer.dart';
 import 'hold_icon.dart';
 
@@ -32,7 +33,20 @@ class _SessionCardState extends State<SessionCard> {
   Intensity _variant = Intensity.full;
   final _checked = <String>{};
 
+  /// Abhaken ist der Moment, auf den die ganze Karte hinarbeitet — der bekommt
+  /// Konfetti, und zwar aus der Karte heraus.
   void _complete(Intensity intensity) {
+    final meta = sessionMeta[widget.type]!;
+    final box = context.findRenderObject() as RenderBox?;
+    burstConfetti(
+      context,
+      origin: box != null && box.hasSize
+          ? box.localToGlobal(Offset(box.size.width / 2, box.size.height * 0.55))
+          : null,
+      colors: [meta.color, meta.color, C.chalk, C.gradeYellow],
+      count: intensity == Intensity.min ? 45 : 80,
+      power: intensity == Intensity.min ? 11 : 14,
+    );
     widget.onComplete(widget.type, intensity, _checked.toList());
     setState(() {
       _checked.clear();

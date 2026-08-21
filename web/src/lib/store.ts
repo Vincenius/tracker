@@ -1,27 +1,25 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { initToken, replaceOnServer, setToken, syncWithServer, UnauthorizedError } from './api';
 import { BADGES, unlockedBadges, type Badge } from './badges';
-import { cheatInfo } from './cheat';
-import { shortDate, toISODate, weekKeyOf } from './date';
+import { toISODate } from './date';
 import { mergeData, sameData } from './merge';
 import { isPauseActive } from './pause';
 import { computeStats } from './stats';
 import { exportFile, importFile, loadData, saveData, emptyData } from './storage';
 import type {
   AppData,
-  CheatDay,
-  CleanDay,
-  CleanKind,
   Intensity,
   PauseEvent,
   Session,
   SessionType,
   Stair,
+  Treat,
+  TreatKind,
   Walk,
 } from './types';
 
 /** Was `commitEarned` an Fortschritt entgegennimmt. */
-type Progress = Pick<AppData, 'sessions' | 'walks' | 'cleanDays' | 'stairs' | 'cheatDays'>;
+type Progress = Pick<AppData, 'sessions' | 'walks' | 'treats' | 'stairs'>;
 
 export interface Celebration {
   level?: number;
@@ -39,14 +37,7 @@ function newId(): string {
 
 /** Beim Laden/Mergen gelten alle erfüllten Badges/Level als gesehen – keine Nachfeier. */
 function normalizeSeen(data: AppData): AppData {
-  const stats = computeStats(
-    data.sessions,
-    data.walks,
-    data.cleanDays,
-    data.stairs,
-    data.pauses,
-    data.cheatDays,
-  );
+  const stats = computeStats(data.sessions, data.walks, data.treats, data.stairs, data.pauses);
   return { ...data, seenBadges: unlockedBadges(stats), seenLevel: stats.level };
 }
 
@@ -61,16 +52,8 @@ export function useTracker() {
   latest.current = data;
 
   const stats = useMemo(
-    () =>
-      computeStats(
-        data.sessions,
-        data.walks,
-        data.cleanDays,
-        data.stairs,
-        data.pauses,
-        data.cheatDays,
-      ),
-    [data.sessions, data.walks, data.cleanDays, data.stairs, data.pauses, data.cheatDays],
+    () => computeStats(data.sessions, data.walks, data.treats, data.stairs, data.pauses),
+    [data.sessions, data.walks, data.treats, data.stairs, data.pauses],
   );
 
   const flash = useCallback((msg: string) => {
@@ -142,17 +125,15 @@ export function useTracker() {
       const next: Progress = {
         sessions: patch.sessions ?? prev.sessions,
         walks: patch.walks ?? prev.walks,
-        cleanDays: patch.cleanDays ?? prev.cleanDays,
+        treats: patch.treats ?? prev.treats,
         stairs: patch.stairs ?? prev.stairs,
-        cheatDays: patch.cheatDays ?? prev.cheatDays,
       };
       const nextStats = computeStats(
         next.sessions,
         next.walks,
-        next.cleanDays,
+        next.treats,
         next.stairs,
         prev.pauses,
-        next.cheatDays,
       );
       const unlocked = unlockedBadges(nextStats);
       const fresh = unlocked.filter((id) => !prev.seenBadges.includes(id));
@@ -181,22 +162,15 @@ export function useTracker() {
       const next: Progress = {
         sessions: patch.sessions ?? prev.sessions,
         walks: patch.walks ?? prev.walks,
-        cleanDays: patch.cleanDays ?? prev.cleanDays,
+        treats: patch.treats ?? prev.treats,
         stairs: patch.stairs ?? prev.stairs,
-        cheatDays: patch.cheatDays ?? prev.cheatDays,
       };
       commit({
         ...prev,
         ...next,
         deleted: [...new Set([...prev.deleted, ...ids])],
-        seenLevel: computeStats(
-          next.sessions,
-          next.walks,
-          next.cleanDays,
-          next.stairs,
-          prev.pauses,
-          next.cheatDays,
-        ).level,
+        seenLevel: computeStats(next.sessions, next.walks, next.treats, next.stairs, prev.pauses)
+          .level,
       });
       schedulePush();
       flash(msg);
@@ -262,64 +236,35 @@ export function useTracker() {
   );
 
   /**
-   * Sauberen Tag in einer Spur an- oder abhaken. Wie beim Spaziergang zählt
-   * pro Tag genau ein Eintrag; ein zweiter Klick korrigiert einen Fehlgriff.
+   * Etwas Süßes eintragen. Anders als beim Spaziergang gibt es hier kein
+   * Umschalten: jeder Eintrag zählt einzeln, beliebig oft am Tag — und kostet
+   * XP. Vergangene Tage lassen sich nachtragen, künftige nicht.
    */
-  const toggleClean = useCallback(
-    (date: string, kind: CleanKind) => {
+  const addTreat = useCallback(
+    (date: string, kind: TreatKind) => {
       const prev = latest.current;
-      const existing = prev.cleanDays.filter((c) => c.date === date && c.kind === kind);
-
-      if (existing.length) {
-        const ids = new Set(existing.map((c) => c.id));
-        commitRemoved(
-          prev,
-          { cleanDays: prev.cleanDays.filter((c) => !ids.has(c.id)) },
-          ids,
-          'Tag zurückgenommen.',
-        );
-        return;
-      }
-
-      const entry: CleanDay = { id: newId(), date, kind, ts: Date.now() };
-      commitEarned(prev, { cleanDays: [...prev.cleanDays, entry] });
+      if (date > toISODate(new Date())) return;
+      const entry: Treat = { id: newId(), date, kind, ts: Date.now() };
+      commitEarned(prev, { treats: [...prev.treats, entry] });
     },
-    [commitEarned, commitRemoved],
+    [commitEarned],
   );
 
-  /**
-   * Cheat Day setzen oder zurücknehmen. Einer pro Woche: der Tag wird bei der
-   * Ernährung übersprungen, statt die Serie zu brechen — XP bringt er keine.
-   * Ist die Woche schon vergeben, passiert nichts außer einem Hinweis; so
-   * bleibt der gesetzte Tag stehen, bis er bewusst zurückgenommen wird.
-   */
-  const toggleCheat = useCallback(
-    (date: string) => {
+  /** Den jüngsten Eintrag dieses Tages zurücknehmen — für den Fehlgriff. */
+  const removeTreat = useCallback(
+    (date: string, kind: TreatKind) => {
       const prev = latest.current;
-      const existing = prev.cheatDays.filter((c) => c.date === date);
-
-      if (existing.length) {
-        const ids = new Set(existing.map((c) => c.id));
-        commitRemoved(
-          prev,
-          { cheatDays: prev.cheatDays.filter((c) => !ids.has(c.id)) },
-          ids,
-          'Cheat Day zurückgenommen.',
-        );
-        return;
-      }
-
-      const taken = cheatInfo(prev.cheatDays).byWeek.get(weekKeyOf(date));
-      if (taken) {
-        flash(`Diese Woche steht der Cheat Day schon auf dem ${shortDate(taken)}.`);
-        return;
-      }
-
-      const entry: CheatDay = { id: newId(), date, ts: Date.now() };
-      commitEarned(prev, { cheatDays: [...prev.cheatDays, entry] });
-      flash('Cheat Day gesetzt — deine Serie läuft weiter.');
+      const todays = prev.treats.filter((t) => t.date === date && t.kind === kind);
+      const last = todays[todays.length - 1];
+      if (!last) return;
+      commitRemoved(
+        prev,
+        { treats: prev.treats.filter((t) => t.id !== last.id) },
+        [last.id],
+        'Eintrag zurückgenommen.',
+      );
     },
-    [commitEarned, commitRemoved, flash],
+    [commitRemoved],
   );
 
   /** Treppe genommen — zählt sofort, beliebig oft am Tag. */
@@ -414,8 +359,8 @@ export function useTracker() {
     addSession,
     removeSession,
     toggleWalk,
-    toggleClean,
-    toggleCheat,
+    addTreat,
+    removeTreat,
     addStair,
     removeStair,
     togglePause,

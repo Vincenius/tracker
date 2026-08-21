@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { confettiFrom } from '../lib/confetti';
 import { shortDate } from '../lib/date';
 import { SESSION_META, WORKOUTS } from '../lib/workouts';
 import type { Intensity, Session, SessionType } from '../lib/types';
@@ -24,7 +25,16 @@ export function SessionCard({ type, done, onComplete, onRemove }: Props) {
   const toggle = (id: string) =>
     setChecked((c) => (c.includes(id) ? c.filter((x) => x !== id) : [...c, id]));
 
-  const complete = (intensity: Intensity) => {
+  /**
+   * Abhaken ist der Moment, auf den die ganze Karte hinarbeitet — der bekommt
+   * Konfetti, und zwar aus dem gedrückten Knopf heraus.
+   */
+  const complete = (intensity: Intensity, e: React.MouseEvent<HTMLButtonElement>) => {
+    confettiFrom(e.currentTarget, {
+      colors: [meta.color, meta.color, 'var(--color-chalk)', 'var(--color-grade-yellow)'],
+      count: intensity === 'min' ? 45 : 80,
+      power: intensity === 'min' ? 11 : 14,
+    });
     onComplete(type, intensity, checked);
     setChecked([]);
     setOpen(false);
@@ -95,7 +105,7 @@ export function SessionCard({ type, done, onComplete, onRemove }: Props) {
           {type === 'boulder' ? (
             <button
               type="button"
-              onClick={() => complete('full')}
+              onClick={(e) => complete('full', e)}
               className="w-full rounded-xl px-4 py-4 text-lg font-bold text-rock-950 transition active:scale-[0.98]"
               style={{ background: meta.color }}
             >
@@ -105,7 +115,7 @@ export function SessionCard({ type, done, onComplete, onRemove }: Props) {
             <div className="flex gap-2">
               <button
                 type="button"
-                onClick={() => complete('full')}
+                onClick={(e) => complete('full', e)}
                 className="flex-1 rounded-xl px-4 py-4 text-base font-bold text-rock-950 transition active:scale-[0.98]"
                 style={{ background: meta.color }}
               >
@@ -116,7 +126,7 @@ export function SessionCard({ type, done, onComplete, onRemove }: Props) {
               </button>
               <button
                 type="button"
-                onClick={() => complete('min')}
+                onClick={(e) => complete('min', e)}
                 className="flex-1 rounded-xl border border-rock-600 bg-rock-850 px-4 py-4 text-base font-bold text-chalk transition hover:border-rock-500 active:scale-[0.98]"
               >
                 Minimum

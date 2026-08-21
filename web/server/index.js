@@ -30,9 +30,8 @@ const EMPTY = {
   version: 1,
   sessions: [],
   walks: [],
-  cleanDays: [],
+  treats: [],
   stairs: [],
-  cheatDays: [],
   pauses: [],
   seenBadges: [],
   seenLevel: 1,
@@ -154,26 +153,20 @@ function sanitize(raw) {
           w && typeof w.id === 'string' && typeof w.date === 'string' && typeof w.ts === 'number',
       )
     : [];
-  const cleanDays = Array.isArray(d.cleanDays)
-    ? d.cleanDays.filter(
-        (c) =>
-          c &&
-          typeof c.id === 'string' &&
-          typeof c.date === 'string' &&
-          typeof c.ts === 'number' &&
-          ['snacks', 'drinks'].includes(c.kind),
+  const treats = Array.isArray(d.treats)
+    ? d.treats.filter(
+        (t) =>
+          t &&
+          typeof t.id === 'string' &&
+          typeof t.date === 'string' &&
+          typeof t.ts === 'number' &&
+          ['sweets', 'drinks'].includes(t.kind),
       )
     : [];
   const stairs = Array.isArray(d.stairs)
     ? d.stairs.filter(
         (s) =>
           s && typeof s.id === 'string' && typeof s.date === 'string' && typeof s.ts === 'number',
-      )
-    : [];
-  const cheatDays = Array.isArray(d.cheatDays)
-    ? d.cheatDays.filter(
-        (c) =>
-          c && typeof c.id === 'string' && typeof c.date === 'string' && typeof c.ts === 'number',
       )
     : [];
   const pauses = Array.isArray(d.pauses)
@@ -191,9 +184,8 @@ function sanitize(raw) {
     version: 1,
     sessions,
     walks,
-    cleanDays,
+    treats,
     stairs,
-    cheatDays,
     pauses,
     seenBadges: strings(d.seenBadges),
     seenLevel: typeof d.seenLevel === 'number' ? d.seenLevel : 1,
@@ -216,9 +208,8 @@ function merge(a, b) {
     version: 1,
     sessions: union(a.sessions, b.sessions, deleted),
     walks: union(a.walks, b.walks, deleted),
-    cleanDays: union(a.cleanDays, b.cleanDays, deleted),
+    treats: union(a.treats, b.treats, deleted),
     stairs: union(a.stairs, b.stairs, deleted),
-    cheatDays: union(a.cheatDays, b.cheatDays, deleted),
     pauses: union(a.pauses, b.pauses, deleted),
     seenBadges: [...new Set([...a.seenBadges, ...b.seenBadges])],
     seenLevel: Math.max(a.seenLevel, b.seenLevel),

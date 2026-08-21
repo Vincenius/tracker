@@ -56,9 +56,17 @@ int _bestStreak(Stats s) =>
     s.currentStreak > s.longestStreak ? s.currentStreak : s.longestStreak;
 int _bestWalkStreak(Stats s) =>
     s.walkStreak > s.longestWalkStreak ? s.walkStreak : s.longestWalkStreak;
-int _bestSnackStreak(Stats s) => s.lanes[CleanKind.snacks]!.longestStreak;
-int _bestDrinkStreak(Stats s) => s.lanes[CleanKind.drinks]!.longestStreak;
-int _bestBothStreak(Stats s) => s.longestCleanBothStreak;
+int _bestCleanStreak(Stats s) =>
+    s.cleanStreak > s.longestCleanStreak ? s.cleanStreak : s.longestCleanStreak;
+int _bestLaneStreak(Stats s, TreatKind kind) {
+  final lane = s.lanes[kind]!;
+  return lane.cleanStreak > lane.longestCleanStreak
+      ? lane.cleanStreak
+      : lane.longestCleanStreak;
+}
+
+int _bestSweetsStreak(Stats s) => _bestLaneStreak(s, TreatKind.sweets);
+int _bestDrinksStreak(Stats s) => _bestLaneStreak(s, TreatKind.drinks);
 
 final badges = <Achievement>[
   _counter(
@@ -323,83 +331,65 @@ final badges = <Achievement>[
     (s) => s.stairTotal,
   ),
 
-  // ——— Ernährung: jeder saubere Tag zählt, jede Serie zählt mehr ———
+  // ——— Ernährung: Punkte gibt es keine, saubere Tage zählen trotzdem ———
   _counter(
-    'clean-first',
-    'Erster sauberer Tag',
-    'Ein Tag ohne Schokolade, Chips oder Zuckergetränke ist eingetragen.',
-    C.cocoa,
-    1,
-    'Tag',
-    (s) => s.cleanAnyDays,
-  ),
-  _counter(
-    'snack-7',
-    'Sieben ohne Süßes',
-    '7 Tage in Folge ohne Schokolade und Chips. Der Reflex ist gebrochen.',
-    C.cocoa,
-    7,
-    'Tage',
-    _bestSnackStreak,
-  ),
-  _counter(
-    'drink-7',
-    'Sieben ohne Zucker',
-    '7 Tage in Folge ohne zuckerhaltige Getränke. Wasser kann auch schmecken.',
+    'clean-7',
+    'Sieben Tage sauber',
+    '7 Tage in Folge nichts Süßes eingetragen. Der Reflex ist gebrochen.',
     C.mint,
     7,
     'Tage',
-    _bestDrinkStreak,
+    _bestCleanStreak,
   ),
   _counter(
     'clean-week',
     'Saubere Woche',
-    'Eine Woche mit sieben Tagen in beiden Spuren. Lückenlos.',
+    'Eine ganze Woche ohne einen einzigen Ausrutscher. Lückenlos.',
     C.gradeGreen,
     1,
     'Woche',
     (s) => s.cleanPerfectWeeks,
   ),
   _counter(
-    'both-14',
-    'Zwei Wochen doppelt',
-    '14 Tage in Folge, an denen beide Spuren sauber waren.',
-    C.gradeYellow,
+    'sweets-14',
+    'Zwei Wochen ohne Riegel',
+    '14 Tage in Folge ohne Schokolade, Kuchen oder Chips.',
+    C.cocoa,
     14,
     'Tage',
-    _bestBothStreak,
+    _bestSweetsStreak,
   ),
   _counter(
-    'snack-30',
-    'Ein Monat ohne Riegel',
-    '30 Tage in Folge ohne Schokolade und Chips.',
-    C.cocoa,
-    30,
-    'Tage',
-    _bestSnackStreak,
-  ),
-  _counter(
-    'drink-30',
-    'Ein Monat nur Wasser',
-    '30 Tage in Folge ohne Zuckergetränke.',
+    'drinks-14',
+    'Zwei Wochen nur Wasser',
+    '14 Tage in Folge ohne zuckerhaltige Getränke.',
     C.mint,
+    14,
+    'Tage',
+    _bestDrinksStreak,
+  ),
+  _counter(
+    'clean-30',
+    'Ein Monat sauber',
+    '30 Tage in Folge ganz ohne Süßes. Einen ganzen Monat lang.',
+    C.gradeYellow,
     30,
     'Tage',
-    _bestDrinkStreak,
+    _bestCleanStreak,
   ),
   _counter(
     'clean-100',
     'Hundert saubere Tage',
-    '100 Tage, an denen beide Spuren sauber waren.',
+    '100 Tage ohne einen Eintrag — nicht am Stück, aber gezählt.',
     C.chalk,
     100,
     'Tage',
-    (s) => s.cleanBothDays,
+    (s) => s.cleanDayTotal,
   ),
   _counter(
     'triple-goal',
     'Dreifach geliefert',
-    'Eine Woche mit Trainingsziel, fünf Spaziergängen und sieben sauberen Tagen. Das volle Programm.',
+    'Eine Woche mit Trainingsziel, fünf Spaziergängen und ohne einen Ausrutscher. Das volle Programm.',
     C.gradeRed,
     1,
     'Woche',
@@ -475,6 +465,16 @@ final badges = <Achievement>[
     1,
     'Serie',
     (s) => s.cleanComebacks,
+    true,
+  ),
+  _counter(
+    'honest',
+    'Ehrlich gemacht',
+    'Den ersten Ausrutscher eingetragen, statt ihn zu verschweigen. Genau dafür ist der Knopf da.',
+    C.cocoa,
+    1,
+    'Eintrag',
+    (s) => s.treatTotal,
     true,
   ),
   _counter(

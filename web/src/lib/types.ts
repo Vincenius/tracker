@@ -1,10 +1,10 @@
 export type SessionType = 'boulder' | 'home' | 'fallback';
 export type Intensity = 'full' | 'min';
 
-/** Die zwei Verzicht-Spuren der Ernährung. Jede läuft für sich. */
-export type CleanKind = 'snacks' | 'drinks';
+/** Die zwei Spuren der Ernährung: Süßes gegessen, Süßes getrunken. */
+export type TreatKind = 'sweets' | 'drinks';
 
-export const CLEAN_KINDS: CleanKind[] = ['snacks', 'drinks'];
+export const TREAT_KINDS: TreatKind[] = ['sweets', 'drinks'];
 
 export interface Session {
   id: string;
@@ -26,15 +26,15 @@ export interface Walk {
 }
 
 /**
- * Ein sauberer Tag in einer Spur — also ein Tag ohne Schokolade/Chips bzw. ohne
- * zuckerhaltige Getränke. Wie Sessions und Spaziergänge unveränderlich mit
- * eigener ID, damit der Sync ohne Sonderfälle mergen kann.
+ * Einmal etwas Süßes gegessen oder getrunken. Anders als alles andere ist das
+ * ein Minus: jeder Eintrag kostet XP. Wie beim Treppenaufstieg zählt jeder
+ * einzelne — beliebig oft am Tag, und nichts einzutragen ist der gute Fall.
  */
-export interface CleanDay {
+export interface Treat {
   id: string;
   /** ISO-Datum, z.B. 2026-07-20 */
   date: string;
-  kind: CleanKind;
+  kind: TreatKind;
   ts: number;
 }
 
@@ -43,18 +43,6 @@ export interface CleanDay {
  * zählt jeder Eintrag — beliebig oft am Tag.
  */
 export interface Stair {
-  id: string;
-  /** ISO-Datum, z.B. 2026-07-20 */
-  date: string;
-  ts: number;
-}
-
-/**
- * Ein selbst gewählter Cheat Day: ein Tag, an dem die Ernährung nicht zählt.
- * Wie alles andere unveränderlich mit eigener ID, damit der Sync ihn ohne
- * Sonderfälle mergen kann.
- */
-export interface CheatDay {
   id: string;
   /** ISO-Datum, z.B. 2026-07-20 */
   date: string;
@@ -78,9 +66,8 @@ export interface AppData {
   version: 1;
   sessions: Session[];
   walks: Walk[];
-  cleanDays: CleanDay[];
+  treats: Treat[];
   stairs: Stair[];
-  cheatDays: CheatDay[];
   pauses: PauseEvent[];
   /** Bereits gefeierte Badges – verhindert doppelte Animationen */
   seenBadges: string[];
@@ -106,23 +93,11 @@ export const XP: Record<SessionType, Record<Intensity, number>> = {
 };
 
 /**
- * Ernährung: der erste saubere Tag bringt wenig, jeder Tag in Folge mehr —
- * bis zur Deckelung. Das belohnt Serien, ohne dass ein Rückfall alles
- * Gesammelte entwertet: verdiente XP bleiben, nur der Zähler startet neu.
+ * Ernährung gibt keine Punkte — sauber essen ist der Normalfall, nicht die
+ * Leistung. Jeder eingetragene Ausrutscher kostet dafür XP: ungefähr so viel,
+ * wie ein Spaziergang bringt.
  */
-export const XP_CLEAN_BASE = 2;
-export const XP_CLEAN_STEP = 1;
-export const XP_CLEAN_CAP = 6;
-/** Extra, wenn an einem Tag beide Spuren sauber sind. */
-export const XP_CLEAN_COMBO = 2;
-
-/** XP für den `streakDay`-ten Tag einer Serie (1-basiert). */
-export function xpForCleanDay(streakDay: number): number {
-  return Math.min(XP_CLEAN_BASE + XP_CLEAN_STEP * (streakDay - 1), XP_CLEAN_CAP);
-}
-
-/** Tage bis die Serie das Maximum erreicht. */
-export const CLEAN_CAP_DAY = (XP_CLEAN_CAP - XP_CLEAN_BASE) / XP_CLEAN_STEP + 1;
+export const XP_TREAT = 5;
 
 export const XP_PER_LEVEL = 150;
 

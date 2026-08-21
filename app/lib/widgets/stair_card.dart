@@ -43,13 +43,16 @@ class StairCard extends StatelessWidget {
             chipColor: _stairColor,
             title: 'Treppe',
             subtitle: status,
-            trailing: Text.rich(
-              TextSpan(
-                text: '$stairToday',
-                style: displaySize(22),
-                children: [
-                  TextSpan(text: '×', style: displaySize(22, color: C.chalkFaint)),
-                ],
+            trailing: Bump(
+              value: stairToday,
+              child: Text.rich(
+                TextSpan(
+                  text: '$stairToday',
+                  style: displaySize(22),
+                  children: [
+                    TextSpan(text: '×', style: displaySize(22, color: C.chalkFaint)),
+                  ],
+                ),
               ),
             ),
           ),

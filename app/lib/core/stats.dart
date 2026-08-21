@@ -1,4 +1,3 @@
-import 'cheat.dart';
 import 'date.dart';
 import 'pause.dart';
 import 'types.dart';
@@ -19,27 +18,39 @@ const cleanGoal = 7;
 class LaneStats {
   const LaneStats({
     required this.kind,
-    required this.dates,
+    required this.perDay,
     required this.total,
-    required this.currentStreak,
-    required this.longestStreak,
-    required this.nextXp,
-    required this.xp,
+    required this.today,
+    required this.days,
+    required this.worstDay,
+    required this.cleanStreak,
+    required this.longestCleanStreak,
+    required this.xpLost,
   });
 
-  final CleanKind kind;
+  final TreatKind kind;
 
-  /// Alle sauberen Tage dieser Spur
-  final Set<String> dates;
+  /// Einträge je Tag
+  final Map<String, int> perDay;
+
+  /// Einträge insgesamt
   final int total;
 
-  /// Laufende Serie; der heutige Tag bricht sie nicht, solange er läuft
-  final int currentStreak;
-  final int longestStreak;
+  /// Einträge heute
+  final int today;
 
-  /// XP, die der nächste saubere Tag in dieser Spur bringt
-  final int nextXp;
-  final int xp;
+  /// Tage mit mindestens einem Eintrag
+  final int days;
+
+  /// meiste Einträge an einem Tag
+  final int worstDay;
+
+  /// laufende Serie an Tagen ohne Eintrag in dieser Spur
+  final int cleanStreak;
+  final int longestCleanStreak;
+
+  /// XP, die diese Spur gekostet hat
+  final int xpLost;
 }
 
 class WeekSummary {
@@ -52,9 +63,11 @@ class WeekSummary {
     required this.walks,
     required this.walkDays,
     required this.walkPerfect,
-    required this.clean,
+    required this.treats,
+    required this.treatsByKind,
+    required this.treatCount,
+    required this.treatDays,
     required this.cleanDays,
-    required this.cleanBothDays,
     required this.cleanPerfect,
     required this.stairs,
     required this.stairCount,
@@ -75,15 +88,21 @@ class WeekSummary {
 
   /// alle fünf Werktage mit Spaziergang
   final bool walkPerfect;
-  final List<CleanDay> clean;
+  final List<Treat> treats;
 
-  /// saubere Tage je Spur in dieser Woche
-  final Map<CleanKind, int> cleanDays;
+  /// Einträge dieser Woche, je Spur
+  final Map<TreatKind, int> treatsByKind;
 
-  /// Tage, an denen beide Spuren sauber waren
-  final int cleanBothDays;
+  /// Einträge dieser Woche insgesamt
+  final int treatCount;
 
-  /// alle sieben Tage in beiden Spuren sauber
+  /// Tage dieser Woche mit mindestens einem Eintrag
+  final int treatDays;
+
+  /// vergangene Tage dieser Woche ganz ohne Eintrag
+  final int cleanDays;
+
+  /// die ganze Woche ohne einen einzigen Eintrag
   final bool cleanPerfect;
   final List<Stair> stairs;
 
@@ -124,23 +143,24 @@ class Stats {
     required this.longestWalkStreak,
     required this.doubleGoalWeeks,
     required this.lanes,
-    required this.cleanBothDays,
-    required this.cleanBothStreak,
-    required this.longestCleanBothStreak,
+    required this.treatTotal,
+    required this.treatToday,
+    required this.treatDays,
+    required this.treatWorstDay,
+    required this.treatXpLost,
+    required this.cleanStreak,
+    required this.longestCleanStreak,
+    required this.cleanDayTotal,
     required this.cleanComebacks,
-    required this.cleanAnyDays,
-    required this.cleanXp,
     required this.cleanPerfectWeeks,
     required this.tripleGoalWeeks,
+    required this.trackedSince,
     required this.stairTotal,
     required this.stairToday,
     required this.stairDays,
     required this.stairBestDay,
     required this.stairStreak,
     required this.longestStairStreak,
-    required this.cheatDates,
-    required this.cheatThisWeek,
-    required this.cheatTotal,
     required this.pauseActive,
     required this.pausedSince,
   });
@@ -194,16 +214,42 @@ class Stats {
   final int longestWalkStreak;
   final int doubleGoalWeeks;
 
-  // ——— Ernährung ———
-  final Map<CleanKind, LaneStats> lanes;
-  final int cleanBothDays;
-  final int cleanBothStreak;
-  final int longestCleanBothStreak;
+  // ——— Ernährung: gezählt wird, was danebenging ———
+  final Map<TreatKind, LaneStats> lanes;
+
+  /// Einträge insgesamt (beide Spuren)
+  final int treatTotal;
+
+  /// Einträge heute
+  final int treatToday;
+
+  /// Tage mit mindestens einem Eintrag
+  final int treatDays;
+
+  /// meiste Einträge an einem Tag
+  final int treatWorstDay;
+
+  /// XP, die die Ernährung insgesamt gekostet hat
+  final int treatXpLost;
+
+  /// laufende Serie an Tagen ganz ohne Eintrag
+  final int cleanStreak;
+  final int longestCleanStreak;
+
+  /// getrackte Tage ganz ohne Eintrag
+  final int cleanDayTotal;
+
+  /// Serien von 7 sauberen Tagen nach einem Ausrutscher
   final int cleanComebacks;
-  final int cleanAnyDays;
-  final int cleanXp;
+
+  /// Wochen ganz ohne Eintrag
   final int cleanPerfectWeeks;
+
+  /// Wochen mit Trainingsziel, allen Spaziergängen und ohne einen Ausrutscher
   final int tripleGoalWeeks;
+
+  /// Erster Tag mit irgendeinem Eintrag — davor wird nichts gewertet
+  final String? trackedSince;
 
   // ——— Treppe ———
   final int stairTotal;
@@ -212,16 +258,6 @@ class Stats {
   final int stairBestDay;
   final int stairStreak;
   final int longestStairStreak;
-
-  // ——— Cheat Days ———
-  /// Gesetzte Cheat-Tage — je Woche zählt nur einer
-  final Set<String> cheatDates;
-
-  /// Cheat Day der laufenden Woche — null, wenn noch keiner gesetzt ist
-  final String? cheatThisWeek;
-
-  /// Cheat-Tage insgesamt
-  final int cheatTotal;
 
   // ——— Pausenmodus ———
   final bool pauseActive;
@@ -240,27 +276,6 @@ bool _joins(String? prev, String date, Set<String> paused) {
   return d == date;
 }
 
-class _LaneXp {
-  const _LaneXp(this.xp, this.longest);
-  final Map<String, int> xp;
-  final int longest;
-}
-
-/// XP pro Tag einer Spur — der wievielte Tag der Serie zählt, nicht der Kalendertag.
-_LaneXp _laneXpByDate(Set<String> dates, Set<String> paused) {
-  final xp = <String, int>{};
-  var longest = 0;
-  var run = 0;
-  String? prev;
-  for (final date in dates.toList()..sort()) {
-    run = _joins(prev, date, paused) ? run + 1 : 1;
-    if (run > longest) longest = run;
-    xp[date] = xpForCleanDay(run);
-    prev = date;
-  }
-  return _LaneXp(xp, longest);
-}
-
 /// Serie rückwärts ab heute. Ein noch nicht abgehakter heutiger Tag bricht sie
 /// nicht — und pausierte Tage ohne Eintrag werden übersprungen.
 int _streakBack(Set<String> dates, String today, Set<String> paused) {
@@ -277,13 +292,59 @@ int _streakBack(Set<String> dates, String today, Set<String> paused) {
   return streak;
 }
 
+class CleanScan {
+  const CleanScan(this.dates, this.current, this.longest, this.sevens);
+
+  /// Alle sauberen Tage — getrackt, nicht pausiert, ohne Eintrag
+  final Set<String> dates;
+
+  /// Laufende Serie bis heute
+  final int current;
+  final int longest;
+
+  /// Wie oft eine Serie die 7 Tage erreicht hat
+  final int sevens;
+}
+
+/// Sauber ist ein Tag, an dem *nichts* eingetragen wurde — die Serie ergibt
+/// sich also aus dem Ausbleiben von Einträgen. Damit das nicht rückwirkend bis
+/// zum Urknall gilt, zählt erst ab dem ersten getrackten Tag. Pausierte Tage
+/// werden übersprungen: sie zählen nicht mit, brechen aber auch nichts.
+CleanScan _cleanScan(
+  Set<String> treatDates,
+  String? from,
+  String today,
+  Set<String> paused,
+) {
+  final dates = <String>{};
+  var current = 0;
+  var longest = 0;
+  var sevens = 0;
+  if (from == null || from.compareTo(today) > 0) {
+    return CleanScan(dates, current, longest, sevens);
+  }
+  var guard = 0;
+  for (var d = from; d.compareTo(today) <= 0 && guard++ < 20000; d = addDays(d, 1)) {
+    if (paused.contains(d)) continue;
+    if (treatDates.contains(d)) {
+      current = 0;
+      continue;
+    }
+    dates.add(d);
+    current++;
+    if (current > longest) longest = current;
+    if (current == cleanGoal) sevens++;
+  }
+  return CleanScan(dates, current, longest, sevens);
+}
+
 WeekSummary summarizeWeek(
   String key,
   List<Session> sessions, [
   List<Walk> walks = const [],
-  List<CleanDay> clean = const [],
-  Map<String, int> cleanXpByDate = const {},
+  List<Treat> treats = const [],
   List<Stair> stairs = const [],
+  Set<String> cleanDates = const {},
 ]) {
   final count = sessions.length;
   bool has(SessionType t) => sessions.any((s) => s.type == t);
@@ -293,23 +354,15 @@ WeekSummary summarizeWeek(
   final dates = {for (final w in walks) w.date};
   final walkDays = dates.where(isWeekday).length;
 
-  final cleanSets = {CleanKind.snacks: <String>{}, CleanKind.drinks: <String>{}};
-  for (final c in clean) {
-    cleanSets[c.kind]!.add(c.date);
+  final treatsByKind = {TreatKind.sweets: 0, TreatKind.drinks: 0};
+  for (final t in treats) {
+    treatsByKind[t.kind] = treatsByKind[t.kind]! + 1;
   }
-  final cleanDays = {
-    CleanKind.snacks: cleanSets[CleanKind.snacks]!.length,
-    CleanKind.drinks: cleanSets[CleanKind.drinks]!.length,
-  };
-  final cleanBothDays =
-      cleanSets[CleanKind.snacks]!.where(cleanSets[CleanKind.drinks]!.contains).length;
-
-  // Ernährungs-XP hängt an der Serie über Wochengrenzen hinweg und kommt
-  // deshalb fertig berechnet von computeStats.
-  final weekDates = {...cleanSets[CleanKind.snacks]!, ...cleanSets[CleanKind.drinks]!};
-  var cleanXp = 0;
-  for (final d in weekDates) {
-    cleanXp += cleanXpByDate[d] ?? 0;
+  // Saubere Tage kommen fertig gerechnet von computeStats: ob ein Tag zählt,
+  // hängt am Trackingstart, am heutigen Datum und am Pausenmodus.
+  var cleanDays = 0;
+  for (var i = 0; i < 7; i++) {
+    if (cleanDates.contains(addDays(key, i))) cleanDays++;
   }
 
   var sessionXp = 0;
@@ -326,23 +379,27 @@ WeekSummary summarizeWeek(
     walks: walks,
     walkDays: walkDays,
     walkPerfect: walkDays >= walkGoal,
-    clean: clean,
+    treats: treats,
+    treatsByKind: treatsByKind,
+    treatCount: treats.length,
+    treatDays: {for (final t in treats) t.date}.length,
     cleanDays: cleanDays,
-    cleanBothDays: cleanBothDays,
-    cleanPerfect: cleanBothDays >= cleanGoal,
+    cleanPerfect: cleanDays >= cleanGoal,
     stairs: stairs,
     stairCount: stairs.length,
-    xp: sessionXp + dates.length * xpWalk + stairs.length * xpStair + cleanXp,
+    xp: sessionXp +
+        dates.length * xpWalk +
+        stairs.length * xpStair -
+        treats.length * xpTreat,
   );
 }
 
 Stats computeStats(
   List<Session> sessions, [
   List<Walk> walks = const [],
-  List<CleanDay> cleanDaysInput = const [],
+  List<Treat> treatsInput = const [],
   List<Stair> stairs = const [],
   List<PauseEvent> pauseEvents = const [],
-  List<CheatDay> cheatDays = const [],
   DateTime? nowInput,
 ]) {
   final now = nowInput ?? DateTime.now();
@@ -355,9 +412,9 @@ Stats computeStats(
   for (final w in walks) {
     walkBuckets.putIfAbsent(weekKeyOf(w.date), () => []).add(w);
   }
-  final cleanBuckets = <String, List<CleanDay>>{};
-  for (final c in cleanDaysInput) {
-    cleanBuckets.putIfAbsent(weekKeyOf(c.date), () => []).add(c);
+  final treatBuckets = <String, List<Treat>>{};
+  for (final t in treatsInput) {
+    treatBuckets.putIfAbsent(weekKeyOf(t.date), () => []).add(t);
   }
   final stairBuckets = <String, List<Stair>>{};
   for (final s in stairs) {
@@ -374,76 +431,64 @@ Stats computeStats(
   bool weekPaused(String key) =>
       [0, 1, 2, 3, 4, 5, 6].any((i) => paused.contains(addDays(key, i)));
 
-  // ——— Cheat Days: übersprungen wie Pausentage, aber nur bei der Ernährung.
-  // Training, Spaziergang und Treppe interessiert der Cheat Day nicht.
-  final cheat = cheatInfo(cheatDays);
-  final cleanSkip = {...paused, ...cheat.dates};
-
-  // ——— Ernährung: erst die Serien, daraus die XP pro Tag ———
-  final laneDates = {CleanKind.snacks: <String>{}, CleanKind.drinks: <String>{}};
-  for (final c in cleanDaysInput) {
-    laneDates[c.kind]!.add(c.date);
+  // Der erste Tag, an dem überhaupt etwas eingetragen wurde. Vorher gibt es
+  // keine sauberen Tage — sonst wäre jede frisch installierte App im Rekord.
+  String? trackedSince;
+  for (final date in [
+    for (final s in sessions) s.date,
+    for (final w in walks) w.date,
+    for (final t in treatsInput) t.date,
+    for (final s in stairs) s.date,
+  ]) {
+    if (trackedSince == null || date.compareTo(trackedSince) < 0) trackedSince = date;
   }
 
-  final bothDates = laneDates[CleanKind.snacks]!
-      .where(laneDates[CleanKind.drinks]!.contains)
-      .toList()
-    ..sort();
-  final bothSet = bothDates.toSet();
+  // ——— Ernährung: gezählt wird, was danebenging ———
+  final lanePerDay = {
+    TreatKind.sweets: <String, int>{},
+    TreatKind.drinks: <String, int>{},
+  };
+  final treatPerDay = <String, int>{};
+  for (final t in treatsInput) {
+    final lane = lanePerDay[t.kind]!;
+    lane[t.date] = (lane[t.date] ?? 0) + 1;
+    treatPerDay[t.date] = (treatPerDay[t.date] ?? 0) + 1;
+  }
 
-  /// XP je Kalendertag über beide Spuren inkl. Kombi-Bonus — für die Wochen-XP.
-  final cleanXpByDate = <String, int>{};
-  final lanes = <CleanKind, LaneStats>{};
-  var cleanXp = 0;
-
-  for (final kind in cleanKinds) {
-    final dates = laneDates[kind]!;
-    final laneResult = _laneXpByDate(dates, cleanSkip);
-    final currentStreak = _streakBack(dates, today, cleanSkip);
-    var laneXp = 0;
-    laneResult.xp.forEach((date, value) {
-      laneXp += value;
-      cleanXpByDate[date] = (cleanXpByDate[date] ?? 0) + value;
-    });
-    cleanXp += laneXp;
+  final lanes = <TreatKind, LaneStats>{};
+  for (final kind in treatKinds) {
+    final perDay = lanePerDay[kind]!;
+    final scan = _cleanScan(perDay.keys.toSet(), trackedSince, today, paused);
+    var total = 0;
+    var worstDay = 0;
+    for (final n in perDay.values) {
+      total += n;
+      if (n > worstDay) worstDay = n;
+    }
     lanes[kind] = LaneStats(
       kind: kind,
-      dates: dates,
-      total: dates.length,
-      currentStreak: currentStreak,
-      longestStreak:
-          laneResult.longest > currentStreak ? laneResult.longest : currentStreak,
-      // Der nächste Tag setzt die Serie fort — also ein Schritt weiter.
-      nextXp: xpForCleanDay(currentStreak + 1),
-      xp: laneXp,
+      perDay: perDay,
+      total: total,
+      today: perDay[today] ?? 0,
+      days: perDay.length,
+      worstDay: worstDay,
+      cleanStreak: scan.current,
+      longestCleanStreak: scan.longest,
+      xpLost: total * xpTreat,
     );
   }
 
-  for (final date in bothDates) {
-    cleanXp += xpCleanCombo;
-    cleanXpByDate[date] = (cleanXpByDate[date] ?? 0) + xpCleanCombo;
-  }
-
-  final cleanBothStreak = _streakBack(bothSet, today, cleanSkip);
-  var longestCleanBothStreak = 0;
-  // Serien ab einer Woche zählen; ab der zweiten ist jede ein Wiedereinstieg.
-  var longRuns = 0;
-  var bothRun = 0;
-  String? prevBoth;
-  for (final date in bothDates) {
-    bothRun = _joins(prevBoth, date, cleanSkip) ? bothRun + 1 : 1;
-    if (bothRun > longestCleanBothStreak) longestCleanBothStreak = bothRun;
-    if (bothRun == cleanGoal) longRuns++;
-    prevBoth = date;
-  }
-  if (cleanBothStreak > longestCleanBothStreak) longestCleanBothStreak = cleanBothStreak;
-  final cleanComebacks = longRuns > 1 ? longRuns - 1 : 0;
+  final clean = _cleanScan(treatPerDay.keys.toSet(), trackedSince, today, paused);
+  // Die erste 7er-Serie ist der Normalfall; jede weitere folgt auf einen
+  // Ausrutscher — genau das ist der Wiedereinstieg.
+  final cleanComebacks = clean.sevens > 1 ? clean.sevens - 1 : 0;
+  final treatXpLost = treatsInput.length * xpTreat;
 
   final thisWeek = currentWeekKey(now);
   final keys = <String>{
     ...buckets.keys,
     ...walkBuckets.keys,
-    ...cleanBuckets.keys,
+    ...treatBuckets.keys,
     ...stairBuckets.keys,
   }.toList()
     ..sort();
@@ -457,9 +502,9 @@ Stats computeStats(
       k,
       [...?buckets[k]]..sort((a, b) => a.ts - b.ts),
       [...?walkBuckets[k]]..sort((a, b) => a.ts - b.ts),
-      [...?cleanBuckets[k]]..sort((a, b) => a.ts - b.ts),
-      cleanXpByDate,
+      [...?treatBuckets[k]]..sort((a, b) => a.ts - b.ts),
       [...?stairBuckets[k]]..sort((a, b) => a.ts - b.ts),
+      clean.dates,
     );
     weeks[k] = w;
     orderedWeeks.add(w);
@@ -490,7 +535,7 @@ Stats computeStats(
   }
 
   final byType = {SessionType.boulder: 0, SessionType.home: 0, SessionType.fallback: 0};
-  var xp = cleanXp;
+  var earned = 0;
   var earlyBird = 0;
   var nightOwl = 0;
   var weekendSessions = 0;
@@ -498,7 +543,7 @@ Stats computeStats(
   var fullChecklists = 0;
   for (final s in sessions) {
     byType[s.type] = byType[s.type]! + 1;
-    xp += xpFor(s);
+    earned += xpFor(s);
     final hour = DateTime.fromMillisecondsSinceEpoch(s.ts).hour;
     if (hour < 9) earlyBird++;
     if (hour >= 21) nightOwl++;
@@ -510,7 +555,7 @@ Stats computeStats(
 
   // ——— Spaziergänge ———
   final walkDates = {for (final w in walks) w.date};
-  xp += walkDates.length * xpWalk;
+  earned += walkDates.length * xpWalk;
   final weekdayWalks = walkDates.where(isWeekday).toList();
   final weekendWalks = walkDates.length - weekdayWalks.length;
 
@@ -552,7 +597,7 @@ Stats computeStats(
     stairPerDay[s.date] = (stairPerDay[s.date] ?? 0) + 1;
   }
   final stairDates = stairPerDay.keys.toSet();
-  xp += stairs.length * xpStair;
+  earned += stairs.length * xpStair;
 
   final stairStreak = _streakBack(stairDates, today, paused);
   var longestStairStreak = 0;
@@ -596,10 +641,17 @@ Stats computeStats(
     emptyRun = w.count == 0 ? emptyRun + 1 : 0;
   }
 
+  // Unter null geht es nicht: ein schlechter Monat kostet Fortschritt, aber
+  // niemals das Konto.
+  final xp = earned - treatXpLost > 0 ? earned - treatXpLost : 0;
   final level = xp ~/ xpPerLevel + 1;
   var stairBestDay = 0;
   for (final v in stairPerDay.values) {
     if (v > stairBestDay) stairBestDay = v;
+  }
+  var treatWorstDay = 0;
+  for (final v in treatPerDay.values) {
+    if (v > treatWorstDay) treatWorstDay = v;
   }
 
   return Stats(
@@ -633,23 +685,24 @@ Stats computeStats(
     longestWalkStreak: longestWalkStreak,
     doubleGoalWeeks: doubleGoalWeeks,
     lanes: lanes,
-    cleanBothDays: bothDates.length,
-    cleanBothStreak: cleanBothStreak,
-    longestCleanBothStreak: longestCleanBothStreak,
+    treatTotal: treatsInput.length,
+    treatToday: treatPerDay[today] ?? 0,
+    treatDays: treatPerDay.length,
+    treatWorstDay: treatWorstDay,
+    treatXpLost: treatXpLost,
+    cleanStreak: clean.current,
+    longestCleanStreak: clean.longest,
+    cleanDayTotal: clean.dates.length,
     cleanComebacks: cleanComebacks,
-    cleanAnyDays: {...laneDates[CleanKind.snacks]!, ...laneDates[CleanKind.drinks]!}.length,
-    cleanXp: cleanXp,
     cleanPerfectWeeks: cleanPerfectWeeks,
     tripleGoalWeeks: tripleGoalWeeks,
+    trackedSince: trackedSince,
     stairTotal: stairs.length,
     stairToday: stairPerDay[today] ?? 0,
     stairDays: stairDates.length,
     stairBestDay: stairBestDay,
     stairStreak: stairStreak,
     longestStairStreak: longestStairStreak,
-    cheatDates: cheat.dates,
-    cheatThisWeek: cheat.byWeek[thisWeek],
-    cheatTotal: cheat.dates.length,
     pauseActive: info.activeSince != null,
     pausedSince: info.activeSince,
   );

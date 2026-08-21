@@ -215,8 +215,8 @@ class _HistoryViewState extends State<HistoryView> {
             children: [
               const CardTitle(
                 'Ernährung',
-                subtitle: 'Zwei Zeilen pro Woche: oben Schokolade & Chips, '
-                    'unten Zuckergetränke.',
+                subtitle: 'Zwei Zeilen pro Woche: oben Süßes gegessen, '
+                    'unten Süßes getrunken. Leer ist gut.',
               ),
               const SizedBox(height: 16),
               for (final lane in laneList) ...[
@@ -234,8 +234,8 @@ class _HistoryViewState extends State<HistoryView> {
                     ),
                     const Spacer(),
                     Text(
-                      '${stats.lanes[lane.kind]!.total} Tage · '
-                      'Bestserie ${stats.lanes[lane.kind]!.longestStreak}',
+                      '${stats.lanes[lane.kind]!.total}× · '
+                      '${stats.lanes[lane.kind]!.days} Tage',
                       style: const TextStyle(fontSize: 12, color: C.chalkFaint),
                     ),
                   ],
@@ -246,36 +246,41 @@ class _HistoryViewState extends State<HistoryView> {
                   spacing: 4,
                   children: [
                     for (final d in foodDays)
-                      Opacity(
-                        opacity: d.future ? 0.3 : 1,
-                        child: Container(
-                          decoration: BoxDecoration(
-                            color: stats.lanes[lane.kind]!.dates.contains(d.date)
-                                ? lane.color
-                                : C.rock800,
-                            // Cheat-Tage bleiben leer, bekommen aber einen
-                            // eigenen Rand — sonst sähen sie wie ein
-                            // Ausrutscher aus.
-                            border: Border.all(
-                              color: stats.lanes[lane.kind]!.dates.contains(d.date)
-                                  ? Colors.transparent
-                                  : stats.cheatDates.contains(d.date)
-                                      ? C.gradeYellow
-                                      : C.rock700,
+                      Builder(
+                        builder: (context) {
+                          final count = stats.lanes[lane.kind]!.perDay[d.date] ?? 0;
+                          return Opacity(
+                            opacity: d.future ? 0.3 : 1,
+                            child: Container(
+                              decoration: BoxDecoration(
+                                color: count == 0
+                                    ? C.rock800
+                                    : count == 1
+                                        ? mix(lane.color, C.rock800, 0.45)
+                                        : count == 2
+                                            ? mix(lane.color, C.rock800, 0.72)
+                                            : lane.color,
+                                border: Border.all(
+                                  color: count > 0 ? Colors.transparent : C.rock700,
+                                ),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
                             ),
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                        ),
+                          );
+                        },
                       ),
                   ],
                 ),
                 const SizedBox(height: 12),
               ],
               _StatRow(children: [
-                StatTile(value: stats.cleanBothDays, label: 'Volle Tage'),
-                StatTile(value: stats.cleanBothStreak, label: 'Tage-Streak'),
-                StatTile(value: stats.longestCleanBothStreak, label: 'Längster Streak'),
-                StatTile(value: stats.cleanPerfectWeeks, label: 'Volle Wochen'),
+                StatTile(value: stats.cleanDayTotal, label: 'Saubere Tage'),
+                StatTile(value: stats.cleanStreak, label: 'Tage-Streak'),
+                StatTile(value: stats.longestCleanStreak, label: 'Längster Streak'),
+                StatTile(
+                  value: stats.treatXpLost > 0 ? '−${stats.treatXpLost}' : '0',
+                  label: 'XP verloren',
+                ),
               ]),
             ],
           ),

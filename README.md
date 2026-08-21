@@ -1,8 +1,8 @@
 # TRACKER
 
 Eine selbst gehostete Sportroutine — **zwei Einheiten pro Woche**, **ein
-Spaziergang an jedem Werktag**, **Treppe statt Aufzug** und **jeden Tag sauber
-essen**. Zwei Frontends, ein Backend, eine JSON-Datei.
+Spaziergang an jedem Werktag**, **Treppe statt Aufzug** und **so wenig Süßes wie
+möglich**. Zwei Frontends, ein Backend, eine JSON-Datei.
 
 | Ordner / Datei | Was drin ist |
 | --- | --- |

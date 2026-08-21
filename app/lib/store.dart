@@ -5,7 +5,6 @@ import 'package:flutter/widgets.dart';
 
 import 'core/api.dart';
 import 'core/badges.dart';
-import 'core/cheat.dart';
 import 'core/config.dart';
 import 'core/date.dart';
 import 'core/merge.dart';
@@ -37,7 +36,7 @@ String _newId() {
 
 class TrackerStore extends ChangeNotifier with WidgetsBindingObserver {
   TrackerStore() {
-    _stats = computeStats(const [], const [], const [], const [], const [], const []);
+    _stats = computeStats(const [], const [], const [], const [], const []);
   }
 
   AppData _data = AppData.empty;
@@ -64,10 +63,9 @@ class TrackerStore extends ChangeNotifier with WidgetsBindingObserver {
     final s = computeStats(
       data.sessions,
       data.walks,
-      data.cleanDays,
+      data.treats,
       data.stairs,
       data.pauses,
-      data.cheatDays,
     );
     return data.copyWith(seenBadges: unlockedBadges(s), seenLevel: s.level);
   }
@@ -103,10 +101,9 @@ class TrackerStore extends ChangeNotifier with WidgetsBindingObserver {
     _stats = computeStats(
       next.sessions,
       next.walks,
-      next.cleanDays,
+      next.treats,
       next.stairs,
       next.pauses,
-      next.cheatDays,
     );
     if (persist) unawaited(saveData(next));
     notifyListeners();
@@ -176,25 +173,22 @@ class TrackerStore extends ChangeNotifier with WidgetsBindingObserver {
   void _commitEarned({
     List<Session>? sessions,
     List<Walk>? walks,
-    List<CleanDay>? cleanDays,
+    List<Treat>? treats,
     List<Stair>? stairs,
-    List<CheatDay>? cheatDays,
   }) {
     final prev = _data;
     final next = prev.copyWith(
       sessions: sessions,
       walks: walks,
-      cleanDays: cleanDays,
+      treats: treats,
       stairs: stairs,
-      cheatDays: cheatDays,
     );
     final nextStats = computeStats(
       next.sessions,
       next.walks,
-      next.cleanDays,
+      next.treats,
       next.stairs,
       prev.pauses,
-      next.cheatDays,
     );
     final unlocked = unlockedBadges(nextStats);
     final fresh = [for (final id in unlocked) if (!prev.seenBadges.contains(id)) id];
@@ -219,25 +213,22 @@ class TrackerStore extends ChangeNotifier with WidgetsBindingObserver {
     String msg, {
     List<Session>? sessions,
     List<Walk>? walks,
-    List<CleanDay>? cleanDays,
+    List<Treat>? treats,
     List<Stair>? stairs,
-    List<CheatDay>? cheatDays,
   }) {
     final prev = _data;
     final next = prev.copyWith(
       sessions: sessions,
       walks: walks,
-      cleanDays: cleanDays,
+      treats: treats,
       stairs: stairs,
-      cheatDays: cheatDays,
     );
     final level = computeStats(
       next.sessions,
       next.walks,
-      next.cleanDays,
+      next.treats,
       next.stairs,
       prev.pauses,
-      next.cheatDays,
     ).level;
     _apply(next.copyWith(
       deleted: {...prev.deleted, ...ids}.toList(),
@@ -289,59 +280,33 @@ class TrackerStore extends ChangeNotifier with WidgetsBindingObserver {
     _commitEarned(walks: [..._data.walks, walk]);
   }
 
-  /// Sauberen Tag in einer Spur an- oder abhaken.
-  void toggleClean(String date, CleanKind kind) {
-    final existing = [
-      for (final c in _data.cleanDays)
-        if (c.date == date && c.kind == kind) c,
-    ];
-    if (existing.isNotEmpty) {
-      final ids = {for (final c in existing) c.id};
-      _commitRemoved(
-        ids,
-        'Tag zurückgenommen.',
-        cleanDays: [for (final c in _data.cleanDays) if (!ids.contains(c.id)) c],
-      );
-      return;
-    }
-    final entry = CleanDay(
+  /// Etwas Süßes eintragen. Anders als beim Spaziergang gibt es hier kein
+  /// Umschalten: jeder Eintrag zählt einzeln, beliebig oft am Tag — und kostet
+  /// XP. Vergangene Tage lassen sich nachtragen, künftige nicht.
+  void addTreat(String date, TreatKind kind) {
+    if (date.compareTo(toISODate(DateTime.now())) > 0) return;
+    final entry = Treat(
       id: _newId(),
       date: date,
       kind: kind,
       ts: DateTime.now().millisecondsSinceEpoch,
     );
-    _commitEarned(cleanDays: [..._data.cleanDays, entry]);
+    _commitEarned(treats: [..._data.treats, entry]);
   }
 
-  /// Cheat Day setzen oder zurücknehmen. Einer pro Woche: der Tag wird bei der
-  /// Ernährung übersprungen, statt die Serie zu brechen — XP bringt er keine.
-  /// Ist die Woche schon vergeben, passiert nichts außer einem Hinweis; so
-  /// bleibt der gesetzte Tag stehen, bis er bewusst zurückgenommen wird.
-  void toggleCheat(String date) {
-    final existing = [for (final c in _data.cheatDays) if (c.date == date) c];
-    if (existing.isNotEmpty) {
-      final ids = {for (final c in existing) c.id};
-      _commitRemoved(
-        ids,
-        'Cheat Day zurückgenommen.',
-        cheatDays: [for (final c in _data.cheatDays) if (!ids.contains(c.id)) c],
-      );
-      return;
-    }
-
-    final taken = cheatInfo(_data.cheatDays).byWeek[weekKeyOf(date)];
-    if (taken != null) {
-      flash('Diese Woche steht der Cheat Day schon auf dem ${shortDate(taken)}.');
-      return;
-    }
-
-    final entry = CheatDay(
-      id: _newId(),
-      date: date,
-      ts: DateTime.now().millisecondsSinceEpoch,
+  /// Den jüngsten Eintrag dieses Tages zurücknehmen — für den Fehlgriff.
+  void removeTreat(String date, TreatKind kind) {
+    final todays = [
+      for (final t in _data.treats)
+        if (t.date == date && t.kind == kind) t,
+    ];
+    if (todays.isEmpty) return;
+    final last = todays.last;
+    _commitRemoved(
+      [last.id],
+      'Eintrag zurückgenommen.',
+      treats: [for (final t in _data.treats) if (t.id != last.id) t],
     );
-    _commitEarned(cheatDays: [..._data.cheatDays, entry]);
-    flash('Cheat Day gesetzt — deine Serie läuft weiter.');
   }
 
   /// Treppe genommen — zählt sofort, beliebig oft am Tag.

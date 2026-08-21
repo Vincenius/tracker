@@ -1,7 +1,7 @@
 # TRACKER — Sportroutine
 
 Eine sehr kleine, selbst gehostete Web-App für genau eine Routine: **zwei Einheiten
-pro Woche**, **ein Spaziergang an jedem Werktag** und **jeden Tag sauber essen**.
+pro Woche**, **ein Spaziergang an jedem Werktag** und **so wenig Süßes wie möglich**.
 Kein Login, kein Setup. Dahinter läuft ein winziges Backend, das alles in **einer
 JSON-Datei** speichert — damit Handy und Desktop denselben Stand sehen.
 
@@ -19,9 +19,9 @@ muss sie dort mitgezogen werden — die Zuordnung der Dateien steht im
 | Home-Workout, Minimum (~5 Min, 1 Runde) | Montag | 8 |
 | Fallback-Einheit mit Klimmzügen | flexibel | 16 (Minimum: 8) |
 | Spaziergang | Montag – Freitag, einer pro Tag | 6 |
-| Tag ohne Schokolade & Chips | täglich | 2 → 6, je nach Serie |
-| Tag ohne Zuckergetränke | täglich | 2 → 6, je nach Serie |
-| beide Ernährungs-Spuren am selben Tag | täglich | +2 Bonus |
+| Treppe statt Aufzug | so oft du willst | 2 |
+| Süßes gegessen | so oft es passiert | **−5** |
+| Süßes getrunken | so oft es passiert | **−5** |
 
 **Wochenziel:** 2 Einheiten. Normalfall `Bouldern + Home`, in Wochen ohne Halle
 `Home + Fallback`. Die Minimum-Version zählt voll mit — der Streak soll nicht an
@@ -39,28 +39,25 @@ Spaziergang ersetzt kein Training. Ihre eigene Serie zählt aufeinanderfolgende
 Der laufende Tag bricht die Serie nie. Am Wochenende lässt sich trotzdem einer
 eintragen — er gibt XP, aber zählt nicht fürs Ziel.
 
-**Ernährung** hat zwei getrennte Spuren, die jeden Tag laufen: *ohne Schokolade &
-Chips* und *ohne zuckerhaltige Getränke*. Abgehakt wird pro Tag und Spur. Anders
-als beim Rest **wächst die Belohnung mit der Serie**: der erste saubere Tag bringt
-2 XP, jeder weitere Tag in Folge einen mehr — bis 6 XP ab Tag 5. Sind an einem Tag
-beide Spuren sauber, kommen 2 XP Kombi-Bonus dazu. Ein Ausrutscher setzt nur den
-Zähler zurück, verdiente XP bleiben; das Ziel ist Weitermachen, nicht Perfektion.
-Wochenziel sind 7 von 7 Tagen in beiden Spuren. Vergangene Tage lassen sich
-nachtragen, künftige nicht.
+**Ernährung** läuft als einziges *nach unten*: sauber essen bringt keine Punkte,
+es ist der Normalfall. Eingetragen wird nur, was danebenging — in zwei Spuren,
+*Süßes gegessen* und *Süßes getrunken*. Jeder Eintrag zählt einzeln, beliebig oft
+am Tag, und kostet **5 XP** — ungefähr einen Spaziergang. Unter null fällt das
+Konto nie.
 
-**Cheat Day:** einmal pro Woche (Mo–So) lässt sich ein Tag von Hand als Cheat Day
-markieren. Er wird bei der Ernährung übersprungen wie ein Pausentag — die Serien
-laufen darüber hinweg, statt zu brechen. XP bringt er keine, und als sauberer Tag
-zählt er auch nicht: eine 7/7-Woche ist mit Cheat Day also nicht drin. Ein zweiter
-Tap nimmt ihn zurück, danach ist die Woche wieder frei. Auf Training,
-Spaziergänge und Treppe hat er keinen Einfluss.
+Ein **sauberer Tag** ist damit ein Tag ohne Eintrag: die Serie ergibt sich aus dem
+Ausbleiben, nicht aus dem Abhaken. Gezählt wird erst ab dem ersten getrackten Tag
+— eine frisch installierte App startet nicht mit Jahren Bestserie. Pausentage
+werden übersprungen: sie zählen nicht mit, brechen aber auch nichts. Wochenziel
+sind 7 saubere Tage. Vergangene Tage lassen sich nachtragen (tippen zählt hoch,
+gedrückt halten nimmt zurück), künftige nicht.
 
 **Level:** alle 150 XP eins rauf, mit kleiner Animation. Einheiten, Spaziergänge
-und saubere Tage zahlen auf dasselbe XP-Konto ein. Eine perfekte Woche —
-2 Einheiten, 5 Spaziergänge, 7 saubere Tage in beiden Spuren — sind gut 160 XP,
-also etwa ein Level pro Woche.
+und Treppenaufstiege zahlen auf dasselbe Konto ein, die Ernährung zieht davon ab.
+Eine Woche nach Plan — 2 Einheiten, 5 Spaziergänge, ein paar Treppen, nichts
+Süßes — sind gut 70 XP, also grob ein Level alle zwei Wochen.
 
-**41 Abzeichen** in [`src/lib/badges.ts`](src/lib/badges.ts) — Meilensteine wie
+**46 Abzeichen** in [`src/lib/badges.ts`](src/lib/badges.ts) — Meilensteine wie
 *Erstbegehung*, *Vier am Stück*, *Plan B gemeistert*, *Stammgast* (10× Halle),
 *Hausnummer* (25× Halle), *Stangentanz* (10 Fallback-Einheiten), *Halbjahr*,
 *Hundert*, *Zehnter Grad*; dazu Charakter-Abzeichen wie *Der Minimalist*
@@ -72,17 +69,19 @@ Für die Spaziergänge: *Erster Schritt*, *Von Montag bis Freitag* (volle Woche)
 Runden*, *Volle Wochen* (4× fünf von fünf) und *Doppelt geliefert* — eine Woche
 mit Trainingsziel **und** allen fünf Spaziergängen.
 
-Für die Ernährung: *Erster sauberer Tag*, *Sieben ohne Süßes* und *Sieben ohne
-Zucker* (7er-Serien je Spur), *Saubere Woche* (7/7 in beiden Spuren), *Zwei Wochen
-doppelt* (14 volle Tage am Stück), *Ein Monat ohne Riegel* und *Ein Monat nur
-Wasser* (30er-Serien), *Hundert saubere Tage* und *Dreifach geliefert* — eine Woche
-mit Trainingsziel, allen Spaziergängen **und** sieben sauberen Tagen.
+Für die Ernährung: *Sieben Tage sauber* und *Ein Monat sauber* (Serien ohne einen
+Eintrag), *Saubere Woche* (eine Woche ganz ohne), *Zwei Wochen ohne Riegel* und
+*Zwei Wochen nur Wasser* (14er-Serien je Spur), *Hundert saubere Tage* und
+*Dreifach geliefert* — eine Woche mit Trainingsziel, allen Spaziergängen **und**
+ohne einen Ausrutscher.
 
-Sieben davon sind **Überraschungen** und werden erst beim Freischalten sichtbar:
+Neun davon sind **Überraschungen** und werden erst beim Freischalten sichtbar:
 *Morgengrauen* (vor 9 Uhr), *Nachtschicht* (ab 21 Uhr), *Wochenend-Projekt*,
 *Trotzdem* (eine Woche komplett im Minimum), *Wiedereinstieg* (volle Woche
-nach ≥ 2 Wochen Pause), *Extrarunde* (5 Spaziergänge am Wochenende) und
-*Neu angesetzt* (nach einem Ausrutscher wieder 7 volle Tage in Folge). Alle
+nach ≥ 2 Wochen Pause), *Extrarunde* (5 Spaziergänge am Wochenende),
+*Wolkenkratzer* (10 Aufstiege an einem Tag), *Ehrlich gemacht* (der erste
+eingetragene Ausrutscher) und *Neu angesetzt* (nach einem Ausrutscher wieder
+7 saubere Tage in Folge). Alle
 Bedingungen werden aus den vorhandenen Einträgen berechnet — auch rückwirkend, wenn neue Abzeichen dazukommen.
 
 ## Screens
@@ -91,18 +90,16 @@ Bedingungen werden aus den vorhandenen Einträgen berechnet — auch rückwirken
    Wochenziel-Ring, Streak, Level und XP-Balken, dazu die drei Wochenziele
    (Training / Spaziergänge / Sauber) nebeneinander. Jede Einheit lässt sich
    aufklappen: Übungsliste als optionale Checkliste plus Timer für Plank/Runden.
-   Darüber die Tageskarte *Heute sauber?* mit den zwei Ernährungs-Schaltern und
-   dem Cheat-Day-Knopf für heute,
+   Darüber die Tageskarte *Heute genascht?* mit einem −/+-Zähler je Spur,
    darunter die Spaziergangs-Karte mit einer Reihe Mo–So: antippen hakt den Tag ab,
    nochmal antippen nimmt ihn zurück. Vergangene Tage lassen sich nachtragen,
    künftige nicht.
-2. **Ernährung** — pro Spur eine Karte mit der Woche Mo–So, der aktuellen Serie und
-   einer Leiter, die zeigt, was der nächste Tag wert ist. Darunter die Cheat-Day-Karte
-   (eine Woche Mo–So, ein Tag wählbar), die letzten 8 Wochen als Kalender zum
-   Nachtragen und eine kurze Erklärung der Punkte.
+2. **Ernährung** — pro Spur eine Karte mit der Woche Mo–So als Zähler-Raster und der
+   laufenden sauberen Serie, dazu die letzten 8 Wochen als Kalender zum Nachtragen
+   und eine kurze Erklärung der Punkte.
 3. **Verlauf** — Heatmap über die Wochen (Contribution-Graph-Stil), ein Raster der
-   Werktage mit Spaziergang, eine Zeile pro Ernährungs-Spur, Statistiken und
-   Export/Import/Zurücksetzen der Daten.
+   Werktage mit Spaziergang, eine Zeile pro Ernährungs-Spur (je dunkler, desto mehr
+   Einträge), Statistiken und Export/Import/Zurücksetzen der Daten.
 4. **Abzeichen** — freigeschaltete und offene Badges mit Fortschrittsbalken.
 
 ## Mehrere Geräte / Synchronisation
@@ -122,8 +119,8 @@ Synchronisiert wird beim Start, nach jeder Änderung, beim Zurückkehren zur App
 und einmal pro Minute. Der Punkt oben rechts zeigt den Zustand (grün = synchron,
 grau = offline) und synchronisiert per Klick sofort.
 
-**Merge statt Überschreiben:** Einheiten, Spaziergänge und saubere Tage sind
-unveränderlich und haben eine eindeutige ID, gemergt wird also die Vereinigung beider Stände. Gelöschte
+**Merge statt Überschreiben:** Einheiten, Spaziergänge, Treppen und Ernährungs-Einträge
+sind unveränderlich und haben eine eindeutige ID, gemergt wird also die Vereinigung beider Stände. Gelöschte
 Einträge landen in `deleted` (Tombstones), damit ein zweites Gerät sie nicht
 wieder hochschiebt. Zwei Geräte können damit auch offline nebeneinander abhaken,
 ohne dass etwas verloren geht.
@@ -275,19 +272,27 @@ In der App geht es auch ohne Shell: Verlauf → *Daten* → **Export (JSON)** l�
       "ts": 1753000000000    // Zeitpunkt des Eintragens
     }
   ],
-  "cleanDays": [
+  "treats": [
     {
       "id": "m2x4k3-1b8ee0",
-      "date": "2026-07-20",  // ein Eintrag pro Tag und Spur
-      "kind": "snacks",      // "snacks" | "drinks"
+      "date": "2026-07-20",  // beliebig viele pro Tag und Spur
+      "kind": "sweets",      // "sweets" | "drinks"
       "ts": 1753000000000
     }
   ],
-  "cheatDays": [
+  "stairs": [
     {
       "id": "m2x4k4-6d21af",
-      "date": "2026-07-25",  // höchstens einer pro Woche
+      "date": "2026-07-20",  // beliebig viele pro Tag
       "ts": 1753000000000
+    }
+  ],
+  "pauses": [
+    {
+      "id": "m2x4k5-3fa102",
+      "date": "2026-07-21",
+      "ts": 1753000000000,
+      "action": "start"      // "start" | "stop"
     }
   ],
   "seenBadges": ["first-week"],

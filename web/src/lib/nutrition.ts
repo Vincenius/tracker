@@ -1,41 +1,41 @@
-import type { CleanKind } from './types';
+import type { TreatKind } from './types';
 
 export interface LaneMeta {
-  kind: CleanKind;
-  /** Was der Tag bedeutet, positiv formuliert */
+  kind: TreatKind;
+  /** Was der Eintrag bedeutet */
   title: string;
   /** Kurzform für enge Stellen */
   short: string;
   emoji: string;
   color: string;
   tagline: string;
-  /** Frage, die der Tages-Button stellt */
-  ask: string;
+  /** Beschriftung des Plus-Knopfes */
+  add: string;
 }
 
 /**
- * Beide Spuren sind Verzicht, werden aber als Gewinn gezeigt: nicht "keine
- * Schokolade", sondern ein sauberer Tag, der Punkte bringt.
+ * Zwei Spuren, beide negativ: eingetragen wird, was daneben ging. Der Ton
+ * bleibt trotzdem sachlich — ein Eintrag ist Buchhaltung, keine Strafpredigt.
  */
-export const LANES: Record<CleanKind, LaneMeta> = {
-  snacks: {
-    kind: 'snacks',
-    title: 'Ohne Schokolade & Chips',
-    short: 'Snacks',
+export const LANES: Record<TreatKind, LaneMeta> = {
+  sweets: {
+    kind: 'sweets',
+    title: 'Süßes gegessen',
+    short: 'Gegessen',
     emoji: '🍫',
     color: 'var(--color-cocoa)',
-    tagline: 'Ein Tag ohne Süßkram und Knabberzeug.',
-    ask: 'Heute weder Schokolade noch Chips',
+    tagline: 'Schokolade, Kuchen, Chips — alles, was zwischendurch reinrutscht.',
+    add: 'Genascht',
   },
   drinks: {
     kind: 'drinks',
-    title: 'Ohne Zuckergetränke',
-    short: 'Getränke',
+    title: 'Süßes getrunken',
+    short: 'Getrunken',
     emoji: '🥤',
     color: 'var(--color-mint)',
-    tagline: 'Wasser, Tee, Kaffee — alles ohne Zucker.',
-    ask: 'Heute nichts Zuckerhaltiges getrunken',
+    tagline: 'Limo, Saft, Zucker im Kaffee — alles außer Wasser und Tee.',
+    add: 'Getrunken',
   },
 };
 
-export const LANE_LIST = [LANES.snacks, LANES.drinks];
+export const LANE_LIST = [LANES.sweets, LANES.drinks];

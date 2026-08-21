@@ -1,3 +1,5 @@
+import { useEffect, useRef, useState } from 'react';
+import { confettiCheer } from '../lib/confetti';
 import { currentWeekKey, shortDate, weekNumber, weekRangeLabel } from '../lib/date';
 import { CLEAN_GOAL, summarizeWeek } from '../lib/stats';
 import type { Tracker } from '../lib/store';
@@ -8,12 +10,19 @@ import { SessionCard } from './SessionCard';
 import { StairCard } from './StairCard';
 import { WalkCard } from './WalkCard';
 
-function GoalRing({ count }: { count: number }) {
+function GoalRing({ count, celebrate }: { count: number; celebrate: boolean }) {
   const pct = Math.min(1, count / 2);
   const r = 30;
   const c = 2 * Math.PI * r;
   return (
     <div className="relative grid h-[76px] w-[76px] shrink-0 place-items-center">
+      {celebrate && (
+        <span
+          aria-hidden="true"
+          className="animate-ping-ring absolute inset-0 rounded-full border-2"
+          style={{ borderColor: 'var(--color-grade-green)' }}
+        />
+      )}
       <svg viewBox="0 0 76 76" className="absolute inset-0 -rotate-90">
         <circle cx="38" cy="38" r={r} fill="none" stroke="var(--color-rock-700)" strokeWidth="7" />
         <circle
@@ -30,7 +39,9 @@ function GoalRing({ count }: { count: number }) {
         />
       </svg>
       <div className="text-center leading-none">
-        <div className="font-display text-2xl">{Math.min(count, 2)}</div>
+        <div key={count} className="animate-bump font-display text-2xl">
+          {Math.min(count, 2)}
+        </div>
         <div className="text-[10px] uppercase tracking-wider text-chalk-faint">von 2</div>
       </div>
     </div>
@@ -43,8 +54,8 @@ export function WeekView({ tracker }: { tracker: Tracker }) {
     addSession,
     removeSession,
     toggleWalk,
-    toggleClean,
-    toggleCheat,
+    addTreat,
+    removeTreat,
     addStair,
     removeStair,
     togglePause,
@@ -54,6 +65,21 @@ export function WeekView({ tracker }: { tracker: Tracker }) {
   const sessions = week.sessions;
   const count = sessions.length;
   const has = (t: SessionType) => sessions.some((s) => s.type === t);
+
+  // Das Wochenziel ist der größere Moment als die einzelne Einheit — dafür gibt
+  // es die volle Salve. `seen` startet beim aktuellen Stand, damit ein Tabwechsel
+  // (oder ein Sync) die Feier nicht wiederholt.
+  const seen = useRef(count);
+  const [justHit, setJustHit] = useState(false);
+  useEffect(() => {
+    const crossed = count >= 2 && seen.current < 2;
+    seen.current = count;
+    if (!crossed) return;
+    confettiCheer();
+    setJustHit(true);
+    const t = window.setTimeout(() => setJustHit(false), 1400);
+    return () => window.clearTimeout(t);
+  }, [count]);
 
   const status =
     count === 0
@@ -99,7 +125,7 @@ export function WeekView({ tracker }: { tracker: Tracker }) {
 
       <section className="chalk-edge chalk-dust rounded-2xl border border-rock-700 bg-rock-900/80 p-4">
         <div className="flex items-center gap-4">
-          <GoalRing count={count} />
+          <GoalRing count={count} celebrate={justHit} />
           <div className="min-w-0">
             <p className="text-xs uppercase tracking-widest text-chalk-faint">
               KW {weekNumber(key)} · {weekRangeLabel(key)}
@@ -146,7 +172,7 @@ export function WeekView({ tracker }: { tracker: Tracker }) {
             },
             {
               label: 'Sauber',
-              done: week.cleanBothDays,
+              done: week.cleanDays,
               goal: CLEAN_GOAL,
               color: 'var(--color-mint)',
             },
@@ -174,7 +200,7 @@ export function WeekView({ tracker }: { tracker: Tracker }) {
         </div>
       </section>
 
-      <NutritionCard stats={stats} toggleClean={toggleClean} toggleCheat={toggleCheat} />
+      <NutritionCard stats={stats} addTreat={addTreat} removeTreat={removeTreat} />
 
       <WalkCard week={week} toggleWalk={toggleWalk} walkStreak={stats.walkStreak} />
 

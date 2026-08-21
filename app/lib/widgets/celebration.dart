@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../store.dart';
 import '../theme.dart';
+import 'card.dart';
+import 'confetti.dart';
 import 'hold_icon.dart';
 
 /// Portierung von web/src/components/Celebration.tsx als Dialog.
@@ -13,10 +15,38 @@ Future<void> showCelebration(BuildContext context, Celebration data) {
   );
 }
 
-class _CelebrationDialog extends StatelessWidget {
+class _CelebrationDialog extends StatefulWidget {
   const _CelebrationDialog({required this.data});
 
   final Celebration data;
+
+  @override
+  State<_CelebrationDialog> createState() => _CelebrationDialogState();
+}
+
+class _CelebrationDialogState extends State<_CelebrationDialog> {
+  @override
+  void initState() {
+    super.initState();
+    // Aus dem Dialog heraus gestartet liegt das Konfetti über dem Barrier —
+    // darunter würde der abgedunkelte Hintergrund es schlucken.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      // Fliegt schon Papier — etwa von der gerade abgehakten Einheit —, bleibt
+      // es dabei: drei Salven übereinander verdecken nur den Text.
+      if (data.level != null) {
+        cheerConfetti(context);
+      } else if (!confettiActive()) {
+        burstConfetti(
+          context,
+          colors: [for (final b in data.badges) b.color],
+          count: 70,
+        );
+      }
+    });
+  }
+
+  Celebration get data => widget.data;
 
   @override
   Widget build(BuildContext context) {
@@ -44,7 +74,10 @@ class _CelebrationDialog extends StatelessWidget {
                     color: C.tape,
                   ),
                 ),
-                Text('${data.level}', style: displaySize(64)),
+                Bump(
+                  value: data.level!,
+                  child: Text('${data.level}', style: displaySize(64)),
+                ),
                 const SizedBox(height: 8),
                 const Text(
                   'Ein Level weiter oben. Der nächste Griff wartet schon.',
@@ -73,7 +106,10 @@ class _CelebrationDialog extends StatelessWidget {
                     padding: const EdgeInsets.only(bottom: 12),
                     child: Row(
                       children: [
-                        HoldIcon(size: 40, filled: true, color: b.color),
+                        Bump(
+                          value: b.id,
+                          child: HoldIcon(size: 40, filled: true, color: b.color),
+                        ),
                         const SizedBox(width: 12),
                         Expanded(
                           child: Column(

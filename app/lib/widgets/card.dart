@@ -112,7 +112,7 @@ class CardHeader extends StatelessWidget {
   }
 }
 
-/// Ein Tag im Wochenraster (Spaziergang, Ernährung): Kürzel oben, Haken unten.
+/// Ein Tag im Wochenraster des Spaziergangs: Kürzel oben, Haken unten.
 class DayToggle extends StatelessWidget {
   const DayToggle({
     super.key,
@@ -124,9 +124,6 @@ class DayToggle extends StatelessWidget {
     this.disabled = false,
     this.muted = false,
     this.semantics,
-    this.onMark = '✓',
-    this.offMark = '·',
-    this.offBorder,
   });
 
   final String label;
@@ -140,23 +137,15 @@ class DayToggle extends StatelessWidget {
   final bool muted;
   final String? semantics;
 
-  /// Zeichen im abgehakten bzw. offenen Zustand — der Cheat Day nutzt 🍕.
-  final String onMark;
-  final String offMark;
-
-  /// Rand für einen offenen Tag, der trotzdem etwas bedeutet (Cheat Day).
-  final Color? offBorder;
-
   @override
   Widget build(BuildContext context) {
     final border = on
         ? color
-        : offBorder ??
-            (today
-                ? C.tape
-                : muted
-                    ? C.rock800
-                    : C.rock700);
+        : today
+            ? C.tape
+            : muted
+                ? C.rock800
+                : C.rock700;
     return Semantics(
       label: semantics,
       toggled: on,
@@ -195,7 +184,7 @@ class DayToggle extends StatelessWidget {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    on ? onMark : offMark,
+                    on ? '✓' : '·',
                     style: TextStyle(
                       fontSize: 16,
                       height: 1,
@@ -267,6 +256,27 @@ class CardTitle extends StatelessWidget {
           Text(subtitle!, style: const TextStyle(fontSize: 14, color: C.chalkDim)),
         ],
       ],
+    );
+  }
+}
+
+/// Kurzer Stups, sobald sich [value] ändert — das Gegenstück zu `.animate-bump`
+/// im Web. Über den Key wird der Tween bei jedem neuen Wert neu gestartet.
+class Bump extends StatelessWidget {
+  const Bump({super.key, required this.value, required this.child});
+
+  final Object value;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return TweenAnimationBuilder<double>(
+      key: ValueKey(value),
+      tween: Tween(begin: 0.72, end: 1),
+      duration: const Duration(milliseconds: 520),
+      curve: Curves.elasticOut,
+      builder: (_, scale, child) => Transform.scale(scale: scale, child: child),
+      child: child,
     );
   }
 }

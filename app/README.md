@@ -74,7 +74,7 @@ lib/
   theme.dart             Farben aus web/src/index.css
   core/                  Reine Logik, 1:1 aus web/src/lib portiert
     types.dart  date.dart  stats.dart  badges.dart  merge.dart
-    pause.dart  cheat.dart  storage.dart  api.dart  config.dart
+    pause.dart  storage.dart  api.dart  config.dart
     workouts.dart  nutrition.dart
   widgets/               Karten, Griff-Icon, Timer, Feier-Dialog
   views/                 Woche · Ernährung · Verlauf · Abzeichen · Einstellungen

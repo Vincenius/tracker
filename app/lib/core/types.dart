@@ -6,10 +6,10 @@ enum SessionType { boulder, home, fallback }
 
 enum Intensity { full, min }
 
-/// Die zwei Verzicht-Spuren der Ernährung. Jede läuft für sich.
-enum CleanKind { snacks, drinks }
+/// Die zwei Spuren der Ernährung: Süßes gegessen, Süßes getrunken.
+enum TreatKind { sweets, drinks }
 
-const cleanKinds = CleanKind.values;
+const treatKinds = TreatKind.values;
 
 T? _enumOf<T extends Enum>(List<T> values, Object? raw) {
   for (final v in values) {
@@ -93,10 +93,10 @@ class Walk {
   Map<String, Object?> toJson() => {'id': id, 'date': date, 'ts': ts};
 }
 
-/// Ein sauberer Tag in einer Spur — also ein Tag ohne Schokolade/Chips bzw.
-/// ohne zuckerhaltige Getränke.
-class CleanDay {
-  const CleanDay({
+/// Einmal etwas Süßes gegessen oder getrunken. Anders als alles andere ist das
+/// ein Minus: jeder Eintrag kostet XP, beliebig oft am Tag.
+class Treat {
+  const Treat({
     required this.id,
     required this.date,
     required this.kind,
@@ -105,16 +105,16 @@ class CleanDay {
 
   final String id;
   final String date;
-  final CleanKind kind;
+  final TreatKind kind;
   final int ts;
 
-  static CleanDay? fromJson(Object? raw) {
+  static Treat? fromJson(Object? raw) {
     if (raw is! Map) return null;
-    final kind = _enumOf(CleanKind.values, raw['kind']);
+    final kind = _enumOf(TreatKind.values, raw['kind']);
     if (raw['id'] is! String || raw['date'] is! String || raw['ts'] is! num || kind == null) {
       return null;
     }
-    return CleanDay(
+    return Treat(
       id: raw['id'] as String,
       date: raw['date'] as String,
       kind: kind,
@@ -137,27 +137,6 @@ class Stair {
     if (raw is! Map) return null;
     if (raw['id'] is! String || raw['date'] is! String || raw['ts'] is! num) return null;
     return Stair(
-      id: raw['id'] as String,
-      date: raw['date'] as String,
-      ts: (raw['ts'] as num).toInt(),
-    );
-  }
-
-  Map<String, Object?> toJson() => {'id': id, 'date': date, 'ts': ts};
-}
-
-/// Ein selbst gewählter Cheat Day: ein Tag, an dem die Ernährung nicht zählt.
-class CheatDay {
-  const CheatDay({required this.id, required this.date, required this.ts});
-
-  final String id;
-  final String date;
-  final int ts;
-
-  static CheatDay? fromJson(Object? raw) {
-    if (raw is! Map) return null;
-    if (raw['id'] is! String || raw['date'] is! String || raw['ts'] is! num) return null;
-    return CheatDay(
       id: raw['id'] as String,
       date: raw['date'] as String,
       ts: (raw['ts'] as num).toInt(),
@@ -204,9 +183,8 @@ class AppData {
   const AppData({
     this.sessions = const [],
     this.walks = const [],
-    this.cleanDays = const [],
+    this.treats = const [],
     this.stairs = const [],
-    this.cheatDays = const [],
     this.pauses = const [],
     this.seenBadges = const [],
     this.seenLevel = 1,
@@ -215,9 +193,8 @@ class AppData {
 
   final List<Session> sessions;
   final List<Walk> walks;
-  final List<CleanDay> cleanDays;
+  final List<Treat> treats;
   final List<Stair> stairs;
-  final List<CheatDay> cheatDays;
   final List<PauseEvent> pauses;
 
   /// Bereits gefeierte Badges – verhindert doppelte Animationen
@@ -234,9 +211,8 @@ class AppData {
   AppData copyWith({
     List<Session>? sessions,
     List<Walk>? walks,
-    List<CleanDay>? cleanDays,
+    List<Treat>? treats,
     List<Stair>? stairs,
-    List<CheatDay>? cheatDays,
     List<PauseEvent>? pauses,
     List<String>? seenBadges,
     int? seenLevel,
@@ -245,9 +221,8 @@ class AppData {
       AppData(
         sessions: sessions ?? this.sessions,
         walks: walks ?? this.walks,
-        cleanDays: cleanDays ?? this.cleanDays,
+        treats: treats ?? this.treats,
         stairs: stairs ?? this.stairs,
-        cheatDays: cheatDays ?? this.cheatDays,
         pauses: pauses ?? this.pauses,
         seenBadges: seenBadges ?? this.seenBadges,
         seenLevel: seenLevel ?? this.seenLevel,
@@ -258,9 +233,8 @@ class AppData {
         'version': 1,
         'sessions': [for (final s in sessions) s.toJson()],
         'walks': [for (final w in walks) w.toJson()],
-        'cleanDays': [for (final c in cleanDays) c.toJson()],
+        'treats': [for (final t in treats) t.toJson()],
         'stairs': [for (final s in stairs) s.toJson()],
-        'cheatDays': [for (final c in cheatDays) c.toJson()],
         'pauses': [for (final p in pauses) p.toJson()],
         'seenBadges': seenBadges,
         'seenLevel': seenLevel,
@@ -283,23 +257,10 @@ const xpTable = <SessionType, Map<Intensity, int>>{
   SessionType.fallback: {Intensity.full: 16, Intensity.min: 8},
 };
 
-/// Ernährung: der erste saubere Tag bringt wenig, jeder Tag in Folge mehr —
-/// bis zur Deckelung.
-const xpCleanBase = 2;
-const xpCleanStep = 1;
-const xpCleanCap = 6;
-
-/// Extra, wenn an einem Tag beide Spuren sauber sind.
-const xpCleanCombo = 2;
-
-/// XP für den `streakDay`-ten Tag einer Serie (1-basiert).
-int xpForCleanDay(int streakDay) {
-  final v = xpCleanBase + xpCleanStep * (streakDay - 1);
-  return v < xpCleanCap ? v : xpCleanCap;
-}
-
-/// Tage bis die Serie das Maximum erreicht.
-const cleanCapDay = (xpCleanCap - xpCleanBase) ~/ xpCleanStep + 1;
+/// Ernährung gibt keine Punkte — sauber essen ist der Normalfall, nicht die
+/// Leistung. Jeder eingetragene Ausrutscher kostet dafür XP: ungefähr so viel,
+/// wie ein Spaziergang bringt.
+const xpTreat = 5;
 
 const xpPerLevel = 150;
 

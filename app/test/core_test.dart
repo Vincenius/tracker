@@ -20,15 +20,12 @@ Session _session(String date, SessionType type, [Intensity i = Intensity.full]) 
 Walk _walk(String date) =>
     Walk(id: 'w-$date', date: date, ts: fromISODate(date).millisecondsSinceEpoch);
 
-CleanDay _clean(String date, CleanKind kind) => CleanDay(
-      id: 'c-$date-${kind.name}',
+Treat _treat(String date, TreatKind kind, [int n = 0]) => Treat(
+      id: 't-$date-${kind.name}-$n',
       date: date,
       kind: kind,
-      ts: fromISODate(date).millisecondsSinceEpoch,
+      ts: fromISODate(date).millisecondsSinceEpoch + n,
     );
-
-CheatDay _cheat(String date) =>
-    CheatDay(id: 'x-$date', date: date, ts: fromISODate(date).millisecondsSinceEpoch);
 
 void main() {
   group('date', () {
@@ -75,7 +72,6 @@ void main() {
         const [],
         const [],
         const [],
-        const [],
         now,
       );
       expect(s.weeks['2026-07-27']!.fulfilled, isTrue);
@@ -86,36 +82,107 @@ void main() {
       expect(s.onPlanWeeks, 1); // Montag Home, Mittwoch Halle
     });
 
-    test('Ernährungsserie steigert die XP bis zur Deckelung', () {
-      final dates = [for (var i = 0; i < 8; i++) addDays('2026-07-22', i)];
+    test('Süßes kostet XP, mehrfach am Tag', () {
       final s = computeStats(
+        [_session('2026-07-27', SessionType.boulder)], // 20 XP
         const [],
-        const [],
-        [for (final d in dates) _clean(d, CleanKind.snacks)],
-        const [],
+        [
+          _treat('2026-07-28', TreatKind.sweets, 1),
+          _treat('2026-07-28', TreatKind.sweets, 2),
+          _treat('2026-07-29', TreatKind.drinks, 1),
+        ],
         const [],
         const [],
         now,
       );
-      // Tage 1..8 -> 2,3,4,5,6,6,6,6 = 38
-      expect(s.lanes[CleanKind.snacks]!.xp, 38);
-      expect(s.lanes[CleanKind.snacks]!.longestStreak, 8);
-      expect(s.lanes[CleanKind.snacks]!.nextXp, xpCleanCap);
-      expect(s.cleanBothDays, 0); // nur eine Spur
+      expect(s.treatTotal, 3);
+      expect(s.treatToday, 1);
+      expect(s.treatWorstDay, 2);
+      expect(s.lanes[TreatKind.sweets]!.total, 2);
+      expect(s.lanes[TreatKind.sweets]!.worstDay, 2);
+      expect(s.lanes[TreatKind.drinks]!.today, 1);
+      expect(s.treatXpLost, 3 * xpTreat);
+      expect(s.xp, 20 - 3 * xpTreat);
     });
 
-    test('Kombi-Bonus für beide Spuren am selben Tag', () {
+    test('das XP-Konto fällt nicht unter null', () {
       final s = computeStats(
         const [],
         const [],
-        [_clean('2026-07-29', CleanKind.snacks), _clean('2026-07-29', CleanKind.drinks)],
-        const [],
+        [for (var i = 0; i < 4; i++) _treat('2026-07-29', TreatKind.sweets, i)],
         const [],
         const [],
         now,
       );
-      expect(s.cleanBothDays, 1);
-      expect(s.cleanXp, xpCleanBase * 2 + xpCleanCombo);
+      expect(s.xp, 0);
+      expect(s.level, 1);
+    });
+
+    test('saubere Tage sind Tage ohne Eintrag — ab dem ersten getrackten Tag', () {
+      // Erster Eintrag am Montag, danach nichts mehr: Mo–Mi sind sauber.
+      final s = computeStats(
+        [_session('2026-07-27', SessionType.home)],
+        const [],
+        const [],
+        const [],
+        const [],
+        now, // Mittwoch
+      );
+      expect(s.trackedSince, '2026-07-27');
+      expect(s.cleanStreak, 3);
+      expect(s.cleanDayTotal, 3);
+      // Die Woche läuft noch — 3 von 7 Tagen sind bisher sauber.
+      expect(s.weeks['2026-07-27']!.cleanDays, 3);
+      expect(s.weeks['2026-07-27']!.cleanPerfect, isFalse);
+    });
+
+    test('ein Eintrag bricht die saubere Serie, danach zählt sie neu', () {
+      final s = computeStats(
+        [_session('2026-07-20', SessionType.home)],
+        const [],
+        [_treat('2026-07-28', TreatKind.drinks)],
+        const [],
+        const [],
+        now, // Mittwoch, 2026-07-29
+      );
+      expect(s.cleanStreak, 1); // nur der heutige Mittwoch
+      expect(s.longestCleanStreak, 8); // 20.–27. Juli
+      expect(s.lanes[TreatKind.sweets]!.cleanStreak, 10); // andere Spur läuft weiter
+    });
+
+    test('eine Woche ohne Eintrag ist eine saubere Woche', () {
+      final s = computeStats(
+        [_session('2026-07-20', SessionType.home)],
+        const [],
+        [_treat('2026-07-29', TreatKind.sweets)],
+        const [],
+        const [],
+        fromISODate('2026-08-02'), // Sonntag
+      );
+      // Vorwoche (20.–26.) komplett sauber, laufende Woche hat einen Eintrag.
+      expect(s.weeks['2026-07-20']!.cleanPerfect, isTrue);
+      expect(s.weeks['2026-07-27']!.cleanPerfect, isFalse);
+      expect(s.cleanPerfectWeeks, 1);
+    });
+
+    test('pausierte Tage zählen weder als sauber noch als Bruch', () {
+      final pauses = [
+        const PauseEvent(id: 'p1', date: '2026-07-28', ts: 1, action: PauseAction.start),
+        const PauseEvent(id: 'p2', date: '2026-07-28', ts: 2, action: PauseAction.stop),
+      ];
+      final s = computeStats(
+        [_session('2026-07-27', SessionType.home)],
+        const [],
+        [_treat('2026-07-28', TreatKind.sweets)], // fällt in die Pause
+        const [],
+        pauses,
+        now,
+      );
+      // Montag und Mittwoch sind sauber, der pausierte Dienstag bricht nichts.
+      expect(s.cleanStreak, 2);
+      expect(s.cleanDayTotal, 2);
+      // XP kostet der Eintrag trotzdem.
+      expect(s.treatXpLost, xpTreat);
     });
 
     test('Pausenmodus friert die Spaziergangsserie ein', () {
@@ -128,54 +195,12 @@ void main() {
         const [],
         const [],
         pauses,
-        const [],
         now,
       );
       expect(s.pauseActive, isTrue);
       expect(s.pausedSince, '2026-07-27');
       // Mo–Mi sind pausiert, die Serie reicht durch bis Donnerstag der Vorwoche.
       expect(s.walkStreak, 2);
-    });
-
-    test('Cheat Day überspringt den Tag, statt die Serie zu brechen', () {
-      // Mo, Di, Do, Mi ist der Cheat Day — die Serie läuft durch.
-      final s = computeStats(
-        const [],
-        const [],
-        [
-          for (final d in ['2026-07-27', '2026-07-28', '2026-07-30'])
-            _clean(d, CleanKind.snacks),
-        ],
-        const [],
-        const [],
-        [_cheat('2026-07-29')],
-        fromISODate('2026-07-30'),
-      );
-      final lane = s.lanes[CleanKind.snacks]!;
-      expect(lane.currentStreak, 3);
-      expect(s.cheatThisWeek, '2026-07-29');
-      // Der Cheat Day bringt keine XP: 2 + 3 + 4 für die drei sauberen Tage.
-      expect(lane.xp, 9);
-    });
-
-    test('pro Woche zählt nur der älteste Cheat Day', () {
-      final s = computeStats(
-        const [],
-        const [],
-        const [],
-        const [],
-        const [],
-        [
-          const CheatDay(id: 'b', date: '2026-07-30', ts: 200),
-          const CheatDay(id: 'a', date: '2026-07-28', ts: 100),
-          // Nächste Woche zählt wieder ein eigener.
-          const CheatDay(id: 'c', date: '2026-08-04', ts: 300),
-        ],
-        fromISODate('2026-08-05'),
-      );
-      expect(s.cheatDates, {'2026-07-28', '2026-08-04'});
-      expect(s.cheatThisWeek, '2026-08-04');
-      expect(s.cheatTotal, 2);
     });
 
     test('Treppe zählt jeden Aufstieg', () {
@@ -188,7 +213,6 @@ void main() {
             Stair(id: 's$i', date: '2026-07-29', ts: 1000 + i),
         ],
         const [],
-        const [],
         now,
       );
       expect(s.stairTotal, 3);
@@ -197,9 +221,8 @@ void main() {
       expect(s.xp, 3 * xpStair);
     });
 
-    test('leere Daten liefern Level 1', () {
+    test('leere Daten liefern Level 1 und keine saubere Serie', () {
       final s = computeStats(
-        const [],
         const [],
         const [],
         const [],
@@ -211,6 +234,11 @@ void main() {
       expect(s.xp, 0);
       expect(s.stairBestDay, 0);
       expect(s.currentStreak, 0);
+      // Ohne einen einzigen Eintrag gibt es keinen Trackingstart — und damit
+      // auch keine rückwirkend saubere Vergangenheit.
+      expect(s.trackedSince, isNull);
+      expect(s.cleanStreak, 0);
+      expect(s.cleanDayTotal, 0);
     });
   });
 
@@ -240,9 +268,8 @@ void main() {
       final data = AppData(
         sessions: [_session('2026-07-27', SessionType.home, Intensity.min)],
         walks: [_walk('2026-07-28')],
-        cleanDays: [_clean('2026-07-29', CleanKind.drinks)],
+        treats: [_treat('2026-07-29', TreatKind.drinks)],
         stairs: const [Stair(id: 's1', date: '2026-07-29', ts: 5)],
-        cheatDays: const [CheatDay(id: 'x1', date: '2026-07-25', ts: 4)],
         pauses: const [
           PauseEvent(id: 'p1', date: '2026-07-01', ts: 1, action: PauseAction.stop),
         ],
@@ -253,9 +280,8 @@ void main() {
       final back = decodeBackup(encodeBackup(data));
       expect(back.sessions.single.intensity, Intensity.min);
       expect(back.walks.single.date, '2026-07-28');
-      expect(back.cleanDays.single.kind, CleanKind.drinks);
+      expect(back.treats.single.kind, TreatKind.drinks);
       expect(back.stairs.single.id, 's1');
-      expect(back.cheatDays.single.date, '2026-07-25');
       expect(back.pauses.single.action, PauseAction.stop);
       expect(back.seenLevel, 3);
       expect(back.deleted, ['gone']);

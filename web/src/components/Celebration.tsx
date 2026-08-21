@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { confetti, confettiActive, confettiCheer } from '../lib/confetti';
 import type { Celebration as CelebrationData } from '../lib/store';
 import { HoldIcon } from './HoldIcon';
 
@@ -10,6 +11,17 @@ export function Celebration({
   onClose: () => void;
 }) {
   const btn = useRef<HTMLButtonElement>(null);
+
+  // Ein Level-Up bekommt die volle Salve, ein Abzeichen einen Schwung in seiner
+  // eigenen Farbe. Fliegt schon Papier — etwa von der gerade abgehakten Einheit
+  // —, bleibt es dabei: drei Salven übereinander verdecken nur den Text.
+  useEffect(() => {
+    if (data.level) confettiCheer();
+    else if (!confettiActive()) {
+      confetti({ y: 0.45, count: 70, colors: data.badges.map((b) => b.color) });
+    }
+    // Leeres Dep-Array mit Absicht: nur beim Öffnen, nicht bei jedem Re-Render.
+  }, []);
 
   useEffect(() => {
     btn.current?.focus();
@@ -35,7 +47,12 @@ export function Celebration({
         {data.level && (
           <>
             <p className="text-xs uppercase tracking-[0.3em] text-tape">Level up</p>
-            <p className="font-display text-7xl leading-none">{data.level}</p>
+            <p
+              className="animate-bump font-display text-7xl leading-none"
+              style={{ textShadow: '0 0 32px color-mix(in srgb, var(--color-tape) 55%, transparent)' }}
+            >
+              {data.level}
+            </p>
             <p className="mt-2 text-sm text-chalk-dim">
               100 XP weiter oben. Der nächste Griff wartet schon.
             </p>
@@ -48,9 +65,13 @@ export function Celebration({
               {data.badges.length > 1 ? 'Neue Abzeichen' : 'Neues Abzeichen'}
             </p>
             <ul className="mt-3 space-y-3">
-              {data.badges.map((b) => (
-                <li key={b.id} className="flex items-center gap-3 text-left">
-                  <span style={{ color: b.color }}>
+              {data.badges.map((b, i) => (
+                <li
+                  key={b.id}
+                  className="animate-rise flex items-center gap-3 text-left"
+                  style={{ animationDelay: `${i * 90}ms`, animationFillMode: 'backwards' }}
+                >
+                  <span className="animate-bump" style={{ color: b.color, animationDelay: `${150 + i * 90}ms` }}>
                     <HoldIcon className="h-10 w-10" filled />
                   </span>
                   <span>

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../core/date.dart';
@@ -9,21 +11,58 @@ import '../widgets/card.dart';
 import '../widgets/nutrition_card.dart';
 import '../widgets/session_card.dart';
 import '../widgets/stair_card.dart';
+import '../widgets/confetti.dart';
 import '../widgets/walk_card.dart';
 
 /// Portierung von web/src/components/WeekView.tsx.
-class WeekView extends StatelessWidget {
+class WeekView extends StatefulWidget {
   const WeekView({super.key, required this.store});
 
   final TrackerStore store;
 
   @override
+  State<WeekView> createState() => _WeekViewState();
+}
+
+class _WeekViewState extends State<WeekView> {
+  /// Stand beim letzten Build — daran hängt, ob das Wochenziel *gerade* fiel.
+  int? _seen;
+  bool _justHit = false;
+  Timer? _cheerTimer;
+
+  @override
+  void dispose() {
+    _cheerTimer?.cancel();
+    super.dispose();
+  }
+
+  /// Das Wochenziel ist der größere Moment als die einzelne Einheit — dafür
+  /// gibt es die volle Salve. Beim ersten Build wird nie gefeiert, sonst ginge
+  /// sie bei jedem Tabwechsel und jedem Sync erneut los.
+  void _checkGoal(int count) {
+    final before = _seen;
+    _seen = count;
+    if (before == null || before >= 2 || count < 2) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      cheerConfetti(context);
+      setState(() => _justHit = true);
+      _cheerTimer?.cancel();
+      _cheerTimer = Timer(const Duration(milliseconds: 1400), () {
+        if (mounted) setState(() => _justHit = false);
+      });
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final store = widget.store;
     final stats = store.stats;
     final key = currentWeekKey();
     final week = stats.weeks[key] ?? summarizeWeek(key, const []);
     final sessions = week.sessions;
     final count = sessions.length;
+    _checkGoal(count);
     bool has(SessionType t) => sessions.any((s) => s.type == t);
 
     final status = count == 0
@@ -41,40 +80,47 @@ class WeekView extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         if (stats.pauseActive) ...[
-          _PauseBanner(stats: stats, onEnd: store.togglePause),
+          _PauseBanner(stats: stats, onEnd: widget.store.togglePause),
           const SizedBox(height: 16),
         ],
-        _Summary(stats: stats, week: week, weekKey: key, count: count, status: status),
+        _Summary(
+          stats: stats,
+          week: week,
+          weekKey: key,
+          count: count,
+          status: status,
+          celebrate: _justHit,
+        ),
         const SizedBox(height: 16),
         NutritionCard(
           stats: stats,
-          toggleClean: store.toggleClean,
-          toggleCheat: store.toggleCheat,
+          addTreat: widget.store.addTreat,
+          removeTreat: widget.store.removeTreat,
         ),
         const SizedBox(height: 16),
-        WalkCard(week: week, toggleWalk: store.toggleWalk, walkStreak: stats.walkStreak),
+        WalkCard(week: week, toggleWalk: widget.store.toggleWalk, walkStreak: stats.walkStreak),
         const SizedBox(height: 16),
         StairCard(
           week: week,
           stairToday: stats.stairToday,
           stairStreak: stats.stairStreak,
-          addStair: store.addStair,
-          removeStair: store.removeStair,
+          addStair: widget.store.addStair,
+          removeStair: widget.store.removeStair,
         ),
         const SizedBox(height: 16),
         SessionCard(
           type: SessionType.home,
           done: [for (final s in sessions) if (s.type == SessionType.home) s],
-          onComplete: store.addSession,
-          onRemove: store.removeSession,
+          onComplete: widget.store.addSession,
+          onRemove: widget.store.removeSession,
         ),
         if (showBoulder) ...[
           const SizedBox(height: 16),
           SessionCard(
             type: SessionType.boulder,
             done: [for (final s in sessions) if (s.type == SessionType.boulder) s],
-            onComplete: store.addSession,
-            onRemove: store.removeSession,
+            onComplete: widget.store.addSession,
+            onRemove: widget.store.removeSession,
           ),
         ],
         if (showFallback) ...[
@@ -91,13 +137,13 @@ class WeekView extends StatelessWidget {
           SessionCard(
             type: SessionType.fallback,
             done: [for (final s in sessions) if (s.type == SessionType.fallback) s],
-            onComplete: store.addSession,
-            onRemove: store.removeSession,
+            onComplete: widget.store.addSession,
+            onRemove: widget.store.removeSession,
           ),
         ],
         if (!stats.pauseActive) ...[
           const SizedBox(height: 16),
-          _PauseButton(onTap: store.togglePause),
+          _PauseButton(onTap: widget.store.togglePause),
         ],
       ],
     );
@@ -111,6 +157,7 @@ class _Summary extends StatelessWidget {
     required this.weekKey,
     required this.count,
     required this.status,
+    this.celebrate = false,
   });
 
   final Stats stats;
@@ -119,12 +166,15 @@ class _Summary extends StatelessWidget {
   final int count;
   final String status;
 
+  /// Das Wochenziel fiel gerade eben — der Ring pulst einmal.
+  final bool celebrate;
+
   @override
   Widget build(BuildContext context) {
     final goals = [
       (label: 'Training', done: count, goal: 2, color: C.tape),
       (label: 'Spaziergänge', done: week.walkDays, goal: walkGoal, color: C.gradeGreen),
-      (label: 'Sauber', done: week.cleanBothDays, goal: cleanGoal, color: C.mint),
+      (label: 'Sauber', done: week.cleanDays, goal: cleanGoal, color: C.mint),
     ];
 
     return TrackerCard(
@@ -134,7 +184,7 @@ class _Summary extends StatelessWidget {
           Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              _GoalRing(count: count),
+              _GoalRing(count: count, celebrate: celebrate),
               const SizedBox(width: 16),
               Expanded(
                 child: Column(
@@ -270,9 +320,10 @@ class _GoalTile extends StatelessWidget {
 }
 
 class _GoalRing extends StatelessWidget {
-  const _GoalRing({required this.count});
+  const _GoalRing({required this.count, this.celebrate = false});
 
   final int count;
+  final bool celebrate;
 
   @override
   Widget build(BuildContext context) {
@@ -283,6 +334,25 @@ class _GoalRing extends StatelessWidget {
       child: Stack(
         alignment: Alignment.center,
         children: [
+          // Ein Ring, der einmal nach außen läuft.
+          if (celebrate)
+            TweenAnimationBuilder<double>(
+              tween: Tween(begin: 0, end: 1),
+              duration: const Duration(milliseconds: 1200),
+              curve: Curves.easeOutExpo,
+              builder: (_, t, _) => Transform.scale(
+                scale: 0.85 + t * 0.65,
+                child: Container(
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: C.gradeGreen.withValues(alpha: 0.9 * (1 - t)),
+                      width: 2,
+                    ),
+                  ),
+                ),
+              ),
+            ),
           SizedBox.expand(
             child: CircularProgressIndicator(
               value: pct,
@@ -295,7 +365,10 @@ class _GoalRing extends StatelessWidget {
           Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text('${count < 2 ? count : 2}', style: displaySize(22)),
+              Bump(
+                value: count,
+                child: Text('${count < 2 ? count : 2}', style: displaySize(22)),
+              ),
               const Text(
                 'VON 2',
                 style: TextStyle(fontSize: 10, letterSpacing: 1, color: C.chalkFaint),

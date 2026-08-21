@@ -181,40 +181,39 @@ export function HistoryView({ tracker }: { tracker: Tracker }) {
       <section className="chalk-edge rounded-2xl border border-rock-700 bg-rock-900/80 p-4">
         <h2 className="font-display text-xl uppercase">Ernährung</h2>
         <p className="mt-1 text-sm text-chalk-dim">
-          Zwei Zeilen pro Woche: oben Schokolade & Chips, unten Zuckergetränke.
+          Zwei Zeilen pro Woche: oben Süßes gegessen, unten Süßes getrunken. Leer ist gut.
         </p>
         <div className="mt-4 space-y-3">
           {LANE_LIST.map((lane) => {
-            const dates = stats.lanes[lane.kind].dates;
+            const laneStats = stats.lanes[lane.kind];
             return (
               <div key={lane.kind}>
                 <div className="mb-1.5 flex items-center gap-2 text-xs text-chalk-faint">
                   <i className="h-2.5 w-2.5 rounded-full" style={{ background: lane.color }} />
                   {lane.short}
                   <span className="ml-auto tabular-nums">
-                    {stats.lanes[lane.kind].total} Tage · Bestserie{' '}
-                    {stats.lanes[lane.kind].longestStreak}
+                    {laneStats.total}× · {laneStats.days} Tage · längste saubere Serie{' '}
+                    {Math.max(laneStats.cleanStreak, laneStats.longestCleanStreak)}
                   </span>
                 </div>
                 <div className="grid grid-cols-[repeat(auto-fill,minmax(14px,1fr))] gap-1">
                   {foodDays.map((d) => {
-                    // Cheat-Tage bleiben leer, bekommen aber einen eigenen
-                    // Rand — sonst sähen sie wie ein Ausrutscher aus.
-                    const cheat = stats.cheatDates.has(d.date);
+                    const count = laneStats.perDay.get(d.date) ?? 0;
                     return (
                       <div
                         key={`${lane.kind}-${d.date}`}
-                        title={`${weekdayLabel(d.date)}, ${shortDate(d.date)}${
-                          cheat ? ' — Cheat Day' : ''
-                        }`}
+                        title={`${weekdayLabel(d.date)}, ${shortDate(d.date)} — ${count}×`}
                         className="aspect-square rounded-[4px] border"
                         style={{
-                          background: dates.has(d.date) ? lane.color : 'var(--color-rock-800)',
-                          borderColor: dates.has(d.date)
-                            ? 'transparent'
-                            : cheat
-                              ? 'var(--color-grade-yellow)'
-                              : 'var(--color-rock-700)',
+                          background:
+                            count === 0
+                              ? 'var(--color-rock-800)'
+                              : count === 1
+                                ? `color-mix(in srgb, ${lane.color} 45%, var(--color-rock-800))`
+                                : count === 2
+                                  ? `color-mix(in srgb, ${lane.color} 72%, var(--color-rock-800))`
+                                  : lane.color,
+                          borderColor: count > 0 ? 'transparent' : 'var(--color-rock-700)',
                           opacity: d.future ? 0.3 : 1,
                         }}
                       />
@@ -226,10 +225,10 @@ export function HistoryView({ tracker }: { tracker: Tracker }) {
           })}
         </div>
         <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <Stat value={stats.cleanBothDays} label="Volle Tage" />
-          <Stat value={stats.cleanBothStreak} label="Tage-Streak" />
-          <Stat value={stats.longestCleanBothStreak} label="Längster Streak" />
-          <Stat value={stats.cleanPerfectWeeks} label="Volle Wochen" />
+          <Stat value={stats.cleanDayTotal} label="Saubere Tage" />
+          <Stat value={stats.cleanStreak} label="Tage-Streak" />
+          <Stat value={stats.longestCleanStreak} label="Längster Streak" />
+          <Stat value={stats.treatXpLost > 0 ? `−${stats.treatXpLost}` : 0} label="XP verloren" />
         </div>
       </section>
 

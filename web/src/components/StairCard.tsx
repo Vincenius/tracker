@@ -48,7 +48,10 @@ export function StairCard({ week, stairToday, stairStreak, addStair, removeStair
           </div>
           <p className="mt-1 text-sm text-chalk-dim">{status}</p>
         </div>
-        <span className="shrink-0 font-display text-2xl leading-none tabular-nums">
+        <span
+          key={stairToday}
+          className="animate-bump shrink-0 font-display text-2xl leading-none tabular-nums"
+        >
           {stairToday}
           <span className="text-chalk-faint">×</span>
         </span>

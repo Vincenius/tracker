@@ -116,6 +116,7 @@ class SessionMeta {
     required this.type,
     required this.title,
     required this.weekday,
+    required this.weekdayIndex,
     required this.tagline,
     required this.color,
     required this.hint,
@@ -124,6 +125,9 @@ class SessionMeta {
   final SessionType type;
   final String title;
   final String weekday;
+
+  /// 0 = Montag
+  final int weekdayIndex;
   final String tagline;
   final Color color;
   final String hint;
@@ -134,6 +138,7 @@ const sessionMeta = <SessionType, SessionMeta>{
     type: SessionType.home,
     title: 'Home-Workout',
     weekday: 'Montag',
+    weekdayIndex: 0,
     tagline: 'Zwei Runden, Körpergewicht, fertig.',
     color: C.gradeBlue,
     hint: 'Auch das Minimum zählt voll.',
@@ -142,6 +147,7 @@ const sessionMeta = <SessionType, SessionMeta>{
     type: SessionType.boulder,
     title: 'Bouldern',
     weekday: 'Mittwoch',
+    weekdayIndex: 2,
     tagline: 'Halle. Griffe. Chalk.',
     color: C.gradeYellow,
     hint: 'Wenn es nicht klappt: Fallback-Einheit zu Hause.',
@@ -150,6 +156,7 @@ const sessionMeta = <SessionType, SessionMeta>{
     type: SessionType.fallback,
     title: 'Fallback-Einheit',
     weekday: 'flexibel',
+    weekdayIndex: 4,
     tagline: 'Zweite Home-Einheit mit Klimmzügen.',
     color: C.gradePurple,
     hint: 'Ersetzt das Bouldern in dieser Woche.',

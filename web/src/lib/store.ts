@@ -178,19 +178,21 @@ export function useTracker() {
     [commit, flash, schedulePush],
   );
 
+  /**
+   * Einheit abhaken — standardmäßig heute. Vergangene Tage lassen sich
+   * nachtragen, künftige nicht; die Woche ergibt sich aus `date`.
+   */
   const addSession = useCallback(
-    (type: SessionType, intensity: Intensity, done: string[] = []) => {
+    (
+      type: SessionType,
+      intensity: Intensity,
+      done: string[] = [],
+      date: string = toISODate(new Date()),
+    ) => {
       const prev = latest.current;
-      const session: Session = {
-        id: newId(),
-        type,
-        intensity,
-        date: toISODate(new Date()),
-        ts: Date.now(),
-        done,
-      };
+      if (date > toISODate(new Date())) return;
+      const session: Session = { id: newId(), type, intensity, date, ts: Date.now(), done };
       commitEarned(prev, { sessions: [...prev.sessions, session] });
-      return session;
     },
     [commitEarned],
   );
@@ -267,27 +269,36 @@ export function useTracker() {
     [commitRemoved],
   );
 
-  /** Treppe genommen — zählt sofort, beliebig oft am Tag. */
-  const addStair = useCallback(() => {
-    const prev = latest.current;
-    const stair: Stair = { id: newId(), date: toISODate(new Date()), ts: Date.now() };
-    commitEarned(prev, { stairs: [...prev.stairs, stair] });
-  }, [commitEarned]);
+  /**
+   * Treppe genommen — zählt sofort, beliebig oft am Tag. Vergangene Tage lassen
+   * sich nachtragen, künftige nicht.
+   */
+  const addStair = useCallback(
+    (date: string = toISODate(new Date())) => {
+      const prev = latest.current;
+      if (date > toISODate(new Date())) return;
+      const stair: Stair = { id: newId(), date, ts: Date.now() };
+      commitEarned(prev, { stairs: [...prev.stairs, stair] });
+    },
+    [commitEarned],
+  );
 
-  /** Den jüngsten heutigen Aufstieg zurücknehmen — für den Fall eines Fehlklicks. */
-  const removeStair = useCallback(() => {
-    const prev = latest.current;
-    const today = toISODate(new Date());
-    const todays = prev.stairs.filter((s) => s.date === today);
-    const last = todays[todays.length - 1];
-    if (!last) return;
-    commitRemoved(
-      prev,
-      { stairs: prev.stairs.filter((s) => s.id !== last.id) },
-      [last.id],
-      'Aufstieg zurückgenommen.',
-    );
-  }, [commitRemoved]);
+  /** Den jüngsten Aufstieg dieses Tages zurücknehmen — für den Fall eines Fehlklicks. */
+  const removeStair = useCallback(
+    (date: string = toISODate(new Date())) => {
+      const prev = latest.current;
+      const onDay = prev.stairs.filter((s) => s.date === date);
+      const last = onDay[onDay.length - 1];
+      if (!last) return;
+      commitRemoved(
+        prev,
+        { stairs: prev.stairs.filter((s) => s.id !== last.id) },
+        [last.id],
+        'Aufstieg zurückgenommen.',
+      );
+    },
+    [commitRemoved],
+  );
 
   /**
    * Pausenmodus an- oder abschalten. Kein `commitEarned`: eine Pause schaltet

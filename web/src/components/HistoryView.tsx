@@ -11,8 +11,115 @@ import {
 } from '../lib/date';
 import { LANE_LIST } from '../lib/nutrition';
 import type { Tracker } from '../lib/store';
-import { summarizeWeek, type WeekSummary } from '../lib/stats';
+import { summarizeWeek, type Stats, type WeekSummary } from '../lib/stats';
+import { XP_STAIR, XP_TREAT, XP_WALK, xpFor } from '../lib/types';
 import { SESSION_META } from '../lib/workouts';
+
+const WALK_ROWS = ['Mo', 'Di', 'Mi', 'Do', 'Fr'];
+
+function signed(xp: number): string {
+  return xp > 0 ? `+${xp}` : xp < 0 ? `−${-xp}` : '0';
+}
+
+interface XpSource {
+  key: string;
+  label: string;
+  color: string;
+  /** Anzahl und XP je Eintrag, z.B. „40× · je 6 XP“ */
+  detail: string;
+  xp: number;
+  weekXp: number;
+}
+
+/** Wie viel jede Art von Eintrag insgesamt und in dieser Woche gebracht (oder gekostet) hat. */
+function xpSources(stats: Stats, week: WeekSummary): XpSource[] {
+  const sessions = stats.orderedWeeks.flatMap((w) => w.sessions);
+  const sum = (list: typeof sessions) => list.reduce((acc, s) => acc + xpFor(s), 0);
+  return [
+    ...(['boulder', 'home', 'fallback'] as const).map((t) => ({
+      key: t,
+      label: SESSION_META[t].title,
+      color: SESSION_META[t].color,
+      detail: `${stats.byType[t]}×`,
+      xp: sum(sessions.filter((s) => s.type === t)),
+      weekXp: sum(week.sessions.filter((s) => s.type === t)),
+    })),
+    {
+      key: 'walks',
+      label: 'Spaziergänge',
+      color: 'var(--color-grade-green)',
+      detail: `${stats.walkTotal}× · je ${XP_WALK} XP`,
+      xp: stats.walkTotal * XP_WALK,
+      // Wie in den Stats zählt pro Tag ein Spaziergang.
+      weekXp: new Set(week.walks.map((w) => w.date)).size * XP_WALK,
+    },
+    {
+      key: 'stairs',
+      label: 'Treppe',
+      color: 'var(--color-grade-yellow)',
+      detail: `${stats.stairTotal}× · je ${XP_STAIR} XP`,
+      xp: stats.stairTotal * XP_STAIR,
+      weekXp: week.stairCount * XP_STAIR,
+    },
+    ...LANE_LIST.map((lane) => ({
+      key: lane.kind,
+      label: lane.title,
+      color: lane.color,
+      detail: `${stats.lanes[lane.kind].total}× · je −${XP_TREAT} XP`,
+      xp: -stats.lanes[lane.kind].xpLost,
+      weekXp: -week.treatsByKind[lane.kind] * XP_TREAT,
+    })),
+  ];
+}
+
+function XpSources({ stats, week }: { stats: Stats; week: WeekSummary }) {
+  const sources = xpSources(stats, week);
+  const max = Math.max(1, ...sources.map((s) => Math.abs(s.xp)));
+  const gained = sources.reduce((acc, s) => acc + Math.max(0, s.xp), 0);
+  const lost = sources.reduce((acc, s) => acc + Math.max(0, -s.xp), 0);
+
+  return (
+    <section className="chalk-edge rounded-2xl border border-rock-700 bg-rock-900/80 p-4">
+      <h2 className="font-display text-xl uppercase">XP-Quellen</h2>
+      <p className="mt-1 text-sm text-chalk-dim">
+        Woher deine {stats.xp} XP kommen — insgesamt und in dieser Woche.
+      </p>
+      <ul className="mt-4 space-y-3">
+        {sources.map((s) => (
+          <li key={s.key}>
+            <div className="flex items-baseline gap-2 text-sm">
+              <i
+                className="h-2.5 w-2.5 shrink-0 self-center rounded-full"
+                style={{ background: s.color }}
+              />
+              <span className="min-w-0 truncate font-semibold">{s.label}</span>
+              <span className="shrink-0 text-xs text-chalk-faint">{s.detail}</span>
+              <span className="ml-auto shrink-0 text-xs tabular-nums text-chalk-faint">
+                Woche {signed(s.weekXp)}
+              </span>
+              <span
+                className="w-16 shrink-0 text-right font-semibold tabular-nums"
+                style={{ color: s.xp < 0 ? 'var(--color-grade-red)' : undefined }}
+              >
+                {signed(s.xp)}
+              </span>
+            </div>
+            <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-rock-800">
+              <div
+                className="h-full rounded-full transition-[width] duration-500"
+                style={{ width: `${(Math.abs(s.xp) / max) * 100}%`, background: s.color }}
+              />
+            </div>
+          </li>
+        ))}
+      </ul>
+      <p className="mt-4 border-t border-rock-800 pt-3 text-xs tabular-nums text-chalk-faint">
+        {signed(gained)} verdient · {signed(-lost)} verloren = {stats.xp} XP
+        {gained - lost < 0 && ' (unter null geht es nicht)'}
+      </p>
+    </section>
+  );
+}
 
 function cellStyle(w: WeekSummary): React.CSSProperties {
   const base: React.CSSProperties = {
@@ -42,6 +149,7 @@ export function HistoryView({ tracker }: { tracker: Tracker }) {
 
   // Mindestens 26 Wochen anzeigen, auch wenn die Historie kürzer ist.
   const today = currentWeekKey();
+  const thisWeek = stats.weeks.get(today) ?? summarizeWeek(today, []);
   const weeks: WeekSummary[] = [];
   const minStart = addWeeks(today, -25);
   const start = stats.orderedWeeks[0] && stats.orderedWeeks[0].key < minStart ? stats.orderedWeeks[0].key : minStart;
@@ -54,7 +162,7 @@ export function HistoryView({ tracker }: { tracker: Tracker }) {
   const walkedDates = new Set(
     stats.orderedWeeks.flatMap((w) => w.walks.map((walk) => walk.date)),
   );
-  const walkDays = weeks.slice(-8).flatMap((w) =>
+  const walkWeeks = weeks.slice(-8).map((w) =>
     [0, 1, 2, 3, 4].map((i) => {
       const date = addDays(w.key, i);
       return { date, done: walkedDates.has(date), future: date > todayDate };
@@ -138,23 +246,36 @@ export function HistoryView({ tracker }: { tracker: Tracker }) {
         <Stat value={stats.fulfilledWeeks} label="Volle Wochen" />
       </section>
 
+      <XpSources stats={stats} week={thisWeek} />
+
       <section className="chalk-edge rounded-2xl border border-rock-700 bg-rock-900/80 p-4">
         <h2 className="font-display text-xl uppercase">Spaziergänge</h2>
         <p className="mt-1 text-sm text-chalk-dim">
-          Ein Punkt pro Werktag der letzten Wochen. Das Wochenende bleibt frei.
+          Eine Spalte pro Woche, ein Feld pro Werktag. Das Wochenende bleibt frei.
         </p>
-        <div className="mt-4 grid grid-cols-5 gap-1.5">
-          {walkDays.map((d) => (
-            <div
-              key={d.date}
-              title={`${weekdayLabel(d.date)}, ${shortDate(d.date)}${d.done ? ' — Spaziergang' : ''}`}
-              className="aspect-square rounded-[5px] border"
-              style={{
-                background: d.done ? 'var(--color-grade-green)' : 'var(--color-rock-800)',
-                borderColor: d.done ? 'transparent' : 'var(--color-rock-700)',
-                opacity: d.future ? 0.3 : 1,
-              }}
-            />
+        <div className="mt-4 flex gap-1">
+          <div className="flex flex-col gap-1 pr-1 text-[10px] leading-4 text-chalk-faint">
+            {WALK_ROWS.map((d) => (
+              <span key={d} className="h-4">
+                {d}
+              </span>
+            ))}
+          </div>
+          {walkWeeks.map((days) => (
+            <div key={days[0].date} className="flex flex-col gap-1">
+              {days.map((d) => (
+                <div
+                  key={d.date}
+                  title={`${weekdayLabel(d.date)}, ${shortDate(d.date)}${d.done ? ' — Spaziergang' : ''}`}
+                  className="h-4 w-4 rounded-[4px] border"
+                  style={{
+                    background: d.done ? 'var(--color-grade-green)' : 'var(--color-rock-800)',
+                    borderColor: d.done ? 'transparent' : 'var(--color-rock-700)',
+                    opacity: d.future ? 0.3 : 1,
+                  }}
+                />
+              ))}
+            </div>
           ))}
         </div>
         <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">

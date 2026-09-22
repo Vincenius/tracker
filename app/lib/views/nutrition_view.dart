@@ -7,17 +7,10 @@ import '../core/types.dart';
 import '../store.dart';
 import '../theme.dart';
 import '../widgets/card.dart';
+import '../widgets/count_day.dart';
 
 const _days = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
 const _historyWeeks = 8;
-
-/// Je mehr Einträge an einem Tag, desto kräftiger die Farbe.
-Color _cellColor(int count, Color color) {
-  if (count <= 0) return C.rock800;
-  if (count == 1) return mix(color, C.rock800, 0.45);
-  if (count == 2) return mix(color, C.rock800, 0.72);
-  return color;
-}
 
 /// Portierung von web/src/components/NutritionView.tsx.
 class NutritionView extends StatelessWidget {
@@ -158,7 +151,7 @@ class NutritionView extends StatelessWidget {
                                   child: Container(
                                     alignment: Alignment.center,
                                     decoration: BoxDecoration(
-                                      color: _cellColor(count, lane.color),
+                                      color: cellColor(count, lane.color),
                                       border: Border.all(
                                         color: count > 0
                                             ? Colors.transparent
@@ -288,7 +281,7 @@ class _LaneCard extends StatelessWidget {
                 Expanded(
                   child: Padding(
                     padding: EdgeInsets.only(right: i == 6 ? 0 : 6),
-                    child: _CountDay(
+                    child: CountDay(
                       label: _days[i],
                       count: stats.perDay[weekDates[i]] ?? 0,
                       color: lane.color,
@@ -319,82 +312,6 @@ class _LaneCard extends StatelessWidget {
                     : ''),
           ),
         ],
-      ),
-    );
-  }
-}
-
-/// Ein Tag als Zähler: tippen trägt ein, lange drücken nimmt zurück. Ein
-/// Umschalter reicht hier nicht — pro Tag sind beliebig viele Einträge möglich.
-class _CountDay extends StatelessWidget {
-  const _CountDay({
-    required this.label,
-    required this.count,
-    required this.color,
-    required this.today,
-    required this.disabled,
-    required this.semantics,
-    required this.onAdd,
-    required this.onRemove,
-  });
-
-  final String label;
-  final int count;
-  final Color color;
-  final bool today;
-  final bool disabled;
-  final String semantics;
-  final VoidCallback onAdd;
-  final VoidCallback onRemove;
-
-  @override
-  Widget build(BuildContext context) {
-    final foreground = count >= 2 ? C.rock950 : C.chalkDim;
-    return Semantics(
-      label: semantics,
-      button: true,
-      child: Opacity(
-        opacity: disabled ? 0.35 : 1,
-        child: Material(
-          color: _cellColor(count, color),
-          borderRadius: BorderRadius.circular(12),
-          child: InkWell(
-            onTap: disabled ? null : onAdd,
-            onLongPress: disabled || count == 0 ? null : onRemove,
-            borderRadius: BorderRadius.circular(12),
-            child: Container(
-              padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 2),
-              decoration: BoxDecoration(
-                border: Border.all(
-                  color: count > 0
-                      ? Colors.transparent
-                      : today
-                          ? C.tape
-                          : C.rock700,
-                ),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    label,
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: foreground,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    count > 0 ? '$count' : '·',
-                    style: TextStyle(fontSize: 16, height: 1, color: foreground),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
       ),
     );
   }

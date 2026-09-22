@@ -1,22 +1,47 @@
 import { useState } from 'react';
 import { confettiFrom } from '../lib/confetti';
-import { shortDate } from '../lib/date';
+import { addDays, currentWeekKey, shortDate, toISODate, weekdayLabel } from '../lib/date';
 import { SESSION_META, WORKOUTS } from '../lib/workouts';
 import type { Intensity, Session, SessionType } from '../lib/types';
 import { XP } from '../lib/types';
 import { HoldIcon } from './HoldIcon';
 import { Timer } from './Timer';
 
+const DAYS = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
+
 interface Props {
   type: SessionType;
+  /** Montag der angezeigten Woche */
+  weekKey: string;
   done: Session[];
-  onComplete: (type: SessionType, intensity: Intensity, checked: string[]) => void;
+  onComplete: (type: SessionType, intensity: Intensity, checked: string[], date: string) => void;
   onRemove: (id: string) => void;
 }
 
-export function SessionCard({ type, done, onComplete, onRemove }: Props) {
+/**
+ * Standardtag zum Abhaken: heute in der laufenden Woche, sonst der geplante
+ * Wochentag der Einheit.
+ */
+function defaultDay(type: SessionType, weekKey: string, today: string): string {
+  if (weekKey === currentWeekKey()) return today;
+  return addDays(weekKey, SESSION_META[type].weekdayIndex);
+}
+
+export function SessionCard({ type, weekKey, done, onComplete, onRemove }: Props) {
   const meta = SESSION_META[type];
+  const today = toISODate(new Date());
+  const isCurrentWeek = weekKey === currentWeekKey();
   const [open, setOpen] = useState(false);
+  const [pickDay, setPickDay] = useState(false);
+  const [day, setDay] = useState(() => defaultDay(type, weekKey, today));
+  // Wochenwechsel setzt den Tag zurück — sonst landet die Einheit in der falschen Woche.
+  const [dayWeek, setDayWeek] = useState(weekKey);
+  if (dayWeek !== weekKey) {
+    setDayWeek(weekKey);
+    setDay(defaultDay(type, weekKey, today));
+    setPickDay(false);
+  }
+  const showPicker = !isCurrentWeek || pickDay;
   const [variant, setVariant] = useState<Intensity>('full');
   const [checked, setChecked] = useState<string[]>([]);
   const workout = WORKOUTS[type][variant];
@@ -35,9 +60,11 @@ export function SessionCard({ type, done, onComplete, onRemove }: Props) {
       count: intensity === 'min' ? 45 : 80,
       power: intensity === 'min' ? 11 : 14,
     });
-    onComplete(type, intensity, checked);
+    onComplete(type, intensity, checked, day);
     setChecked([]);
     setOpen(false);
+    setPickDay(false);
+    setDay(defaultDay(type, weekKey, today));
   };
 
   return (
@@ -102,6 +129,35 @@ export function SessionCard({ type, done, onComplete, onRemove }: Props) {
         </div>
       ) : (
         <div className="px-4 pb-4">
+          {showPicker && (
+            <div className="animate-fade mb-2">
+              <p className="mb-1.5 text-xs text-chalk-faint">
+                An welchem Tag? {weekdayLabel(day)}, {shortDate(day)}
+              </p>
+              <div className="grid grid-cols-7 gap-1.5" role="group" aria-label="Tag wählen">
+                {DAYS.map((label, i) => {
+                  const date = addDays(weekKey, i);
+                  const on = date === day;
+                  return (
+                    <button
+                      key={date}
+                      type="button"
+                      disabled={date > today}
+                      onClick={() => setDay(date)}
+                      aria-pressed={on}
+                      aria-label={`${weekdayLabel(date)}, ${shortDate(date)}`}
+                      className={`rounded-lg border py-1.5 text-xs font-semibold transition active:scale-[0.96] disabled:cursor-not-allowed disabled:opacity-35 ${
+                        on ? 'text-rock-950' : 'border-rock-700 bg-rock-850 text-chalk-dim hover:border-rock-500'
+                      }`}
+                      style={on ? { background: meta.color, borderColor: meta.color } : undefined}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
           {type === 'boulder' ? (
             <button
               type="button"
@@ -136,7 +192,21 @@ export function SessionCard({ type, done, onComplete, onRemove }: Props) {
               </button>
             </div>
           )}
-          <p className="mt-2 text-xs text-chalk-faint">{meta.hint}</p>
+          <p className="mt-2 text-xs text-chalk-faint">
+            {meta.hint}
+            {isCurrentWeek && !pickDay && (
+              <>
+                {' '}
+                <button
+                  type="button"
+                  onClick={() => setPickDay(true)}
+                  className="underline decoration-rock-600 underline-offset-2 transition hover:text-chalk-dim"
+                >
+                  An einem anderen Tag?
+                </button>
+              </>
+            )}
+          </p>
         </div>
       )}
 

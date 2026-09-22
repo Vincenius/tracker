@@ -14,24 +14,50 @@ class SessionCard extends StatefulWidget {
   const SessionCard({
     super.key,
     required this.type,
+    required this.weekKey,
     required this.done,
     required this.onComplete,
     required this.onRemove,
   });
 
   final SessionType type;
+
+  /// Montag der angezeigten Woche
+  final String weekKey;
   final List<Session> done;
-  final void Function(SessionType, Intensity, List<String>) onComplete;
+  final void Function(SessionType, Intensity, List<String>, String) onComplete;
   final void Function(String) onRemove;
 
   @override
   State<SessionCard> createState() => _SessionCardState();
 }
 
+const _days = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
+
 class _SessionCardState extends State<SessionCard> {
   bool _open = false;
+  bool _pickDay = false;
+  late String _day = _defaultDay();
   Intensity _variant = Intensity.full;
   final _checked = <String>{};
+
+  bool get _isCurrentWeek => widget.weekKey == currentWeekKey();
+
+  /// Standardtag zum Abhaken: heute in der laufenden Woche, sonst der geplante
+  /// Wochentag der Einheit.
+  String _defaultDay() => _isCurrentWeek
+      ? toISODate(DateTime.now())
+      : addDays(widget.weekKey, sessionMeta[widget.type]!.weekdayIndex);
+
+  @override
+  void didUpdateWidget(SessionCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Wochenwechsel setzt den Tag zurück — sonst landet die Einheit in der falschen Woche.
+    if (oldWidget.weekKey != widget.weekKey) {
+      _day = _defaultDay();
+      _pickDay = false;
+    }
+  }
 
   /// Abhaken ist der Moment, auf den die ganze Karte hinarbeitet — der bekommt
   /// Konfetti, und zwar aus der Karte heraus.
@@ -47,10 +73,12 @@ class _SessionCardState extends State<SessionCard> {
       count: intensity == Intensity.min ? 45 : 80,
       power: intensity == Intensity.min ? 11 : 14,
     );
-    widget.onComplete(widget.type, intensity, _checked.toList());
+    widget.onComplete(widget.type, intensity, _checked.toList(), _day);
     setState(() {
       _checked.clear();
       _open = false;
+      _pickDay = false;
+      _day = _defaultDay();
     });
   }
 
@@ -91,6 +119,15 @@ class _SessionCardState extends State<SessionCard> {
                       ),
                     )
                 else ...[
+                  if (!_isCurrentWeek || _pickDay) ...[
+                    _DayPicker(
+                      weekKey: widget.weekKey,
+                      day: _day,
+                      color: meta.color,
+                      onPick: (d) => setState(() => _day = d),
+                    ),
+                    const SizedBox(height: 8),
+                  ],
                   if (widget.type == SessionType.boulder)
                     _BigButton(
                       color: meta.color,
@@ -120,6 +157,22 @@ class _SessionCardState extends State<SessionCard> {
                     ),
                   const SizedBox(height: 8),
                   Hint(meta.hint),
+                  if (_isCurrentWeek && !_pickDay)
+                    GestureDetector(
+                      onTap: () => setState(() => _pickDay = true),
+                      child: const Padding(
+                        padding: EdgeInsets.only(top: 4),
+                        child: Text(
+                          'An einem anderen Tag?',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: C.chalkFaint,
+                            decoration: TextDecoration.underline,
+                            decorationColor: C.rock600,
+                          ),
+                        ),
+                      ),
+                    ),
                 ],
               ],
             ),
@@ -413,6 +466,80 @@ class _ExerciseRow extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// Tag der angezeigten Woche wählen, auf den die Einheit gebucht wird.
+class _DayPicker extends StatelessWidget {
+  const _DayPicker({
+    required this.weekKey,
+    required this.day,
+    required this.color,
+    required this.onPick,
+  });
+
+  final String weekKey;
+  final String day;
+  final Color color;
+  final void Function(String) onPick;
+
+  @override
+  Widget build(BuildContext context) {
+    final today = toISODate(DateTime.now());
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Hint('An welchem Tag? ${weekdayLabel(day)}, ${shortDate(day)}'),
+        const SizedBox(height: 6),
+        Row(
+          children: [
+            for (var i = 0; i < 7; i++)
+              Expanded(
+                child: Padding(
+                  padding: EdgeInsets.only(right: i == 6 ? 0 : 6),
+                  child: Builder(builder: (_) {
+                    final date = addDays(weekKey, i);
+                    final on = date == day;
+                    final future = date.compareTo(today) > 0;
+                    return Semantics(
+                      label: '${weekdayLabel(date)}, ${shortDate(date)}',
+                      selected: on,
+                      button: true,
+                      child: Opacity(
+                        opacity: future ? 0.35 : 1,
+                        child: Material(
+                          color: on ? color : C.rock850,
+                          borderRadius: BorderRadius.circular(8),
+                          child: InkWell(
+                            onTap: future ? null : () => onPick(date),
+                            borderRadius: BorderRadius.circular(8),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(vertical: 6),
+                              alignment: Alignment.center,
+                              decoration: BoxDecoration(
+                                border: Border.all(color: on ? color : C.rock700),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Text(
+                                _days[i],
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: on ? C.rock950 : C.chalkDim,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    );
+                  }),
+                ),
+              ),
+          ],
+        ),
+      ],
     );
   }
 }

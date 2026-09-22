@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { confettiCheer } from '../lib/confetti';
-import { currentWeekKey, shortDate, weekNumber, weekRangeLabel } from '../lib/date';
+import { addWeeks, currentWeekKey, shortDate, weekNumber, weekRangeLabel } from '../lib/date';
 import { CLEAN_GOAL, summarizeWeek } from '../lib/stats';
 import type { Tracker } from '../lib/store';
 import type { SessionType } from '../lib/types';
@@ -60,7 +60,11 @@ export function WeekView({ tracker }: { tracker: Tracker }) {
     removeStair,
     togglePause,
   } = tracker;
-  const key = currentWeekKey();
+  const thisWeek = currentWeekKey();
+  // Vergangene Wochen lassen sich aufschlagen und nachtragen — die Zukunft nicht.
+  const [viewKey, setViewKey] = useState(thisWeek);
+  const key = viewKey > thisWeek ? thisWeek : viewKey;
+  const isCurrentWeek = key === thisWeek;
   const week = stats.weeks.get(key) ?? summarizeWeek(key, []);
   const sessions = week.sessions;
   const count = sessions.length;
@@ -69,23 +73,28 @@ export function WeekView({ tracker }: { tracker: Tracker }) {
   // Das Wochenziel ist der größere Moment als die einzelne Einheit — dafür gibt
   // es die volle Salve. `seen` startet beim aktuellen Stand, damit ein Tabwechsel
   // (oder ein Sync) die Feier nicht wiederholt.
-  const seen = useRef(count);
+  // Ein Wochenwechsel ist kein Erfolg: `seen` merkt sich die Woche mit.
+  const seen = useRef({ key, count });
   const [justHit, setJustHit] = useState(false);
   useEffect(() => {
-    const crossed = count >= 2 && seen.current < 2;
-    seen.current = count;
+    const crossed = seen.current.key === key && count >= 2 && seen.current.count < 2;
+    seen.current = { key, count };
     if (!crossed) return;
     confettiCheer();
     setJustHit(true);
     const t = window.setTimeout(() => setJustHit(false), 1400);
     return () => window.clearTimeout(t);
-  }, [count]);
+  }, [key, count]);
 
   const status =
     count === 0
-      ? 'Frische Woche. Zwei Einheiten – du kennst den Plan.'
+      ? isCurrentWeek
+        ? 'Frische Woche. Zwei Einheiten – du kennst den Plan.'
+        : 'Keine Einheit eingetragen. Was vergessen?'
       : count === 1
-        ? 'Eine geschafft. Noch eine bis zum Wochenziel.'
+        ? isCurrentWeek
+          ? 'Eine geschafft. Noch eine bis zum Wochenziel.'
+          : 'Eine Einheit. Fehlt noch eine?'
         : count === 2
           ? 'Wochenziel erreicht. Stark!'
           : 'Wochenziel übertroffen. Chapeau!';
@@ -95,7 +104,43 @@ export function WeekView({ tracker }: { tracker: Tracker }) {
 
   return (
     <div className="space-y-4">
-      {stats.pauseActive && (
+      <nav
+        aria-label="Woche wählen"
+        className="flex items-center gap-2 rounded-xl border border-rock-800 p-1"
+      >
+        <button
+          type="button"
+          onClick={() => setViewKey(addWeeks(key, -1))}
+          aria-label="Vorherige Woche"
+          className="h-9 w-10 rounded-lg text-lg text-chalk-dim transition hover:bg-rock-800 hover:text-chalk"
+        >
+          ‹
+        </button>
+        <div className="min-w-0 flex-1 text-center text-sm">
+          {isCurrentWeek ? (
+            <span className="font-semibold">Diese Woche</span>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setViewKey(thisWeek)}
+              className="font-semibold text-tape transition hover:brightness-110"
+            >
+              Nachtragen · KW {weekNumber(key)} — zurück zu heute
+            </button>
+          )}
+        </div>
+        <button
+          type="button"
+          onClick={() => setViewKey(addWeeks(key, 1))}
+          disabled={isCurrentWeek}
+          aria-label="Nächste Woche"
+          className="h-9 w-10 rounded-lg text-lg text-chalk-dim transition hover:bg-rock-800 hover:text-chalk disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent"
+        >
+          ›
+        </button>
+      </nav>
+
+      {isCurrentWeek && stats.pauseActive && (
         <section
           className="chalk-edge rounded-2xl border bg-rock-900/80 p-4"
           style={{ borderColor: 'var(--color-grade-yellow)' }}
@@ -200,7 +245,9 @@ export function WeekView({ tracker }: { tracker: Tracker }) {
         </div>
       </section>
 
-      <NutritionCard stats={stats} addTreat={addTreat} removeTreat={removeTreat} />
+      {isCurrentWeek && (
+        <NutritionCard stats={stats} addTreat={addTreat} removeTreat={removeTreat} />
+      )}
 
       <WalkCard week={week} toggleWalk={toggleWalk} walkStreak={stats.walkStreak} />
 
@@ -214,6 +261,7 @@ export function WeekView({ tracker }: { tracker: Tracker }) {
 
       <SessionCard
         type="home"
+        weekKey={key}
         done={sessions.filter((s) => s.type === 'home')}
         onComplete={addSession}
         onRemove={removeSession}
@@ -222,6 +270,7 @@ export function WeekView({ tracker }: { tracker: Tracker }) {
       {showBoulder && (
         <SessionCard
           type="boulder"
+          weekKey={key}
           done={sessions.filter((s) => s.type === 'boulder')}
           onComplete={addSession}
           onRemove={removeSession}
@@ -237,6 +286,7 @@ export function WeekView({ tracker }: { tracker: Tracker }) {
           )}
           <SessionCard
             type="fallback"
+            weekKey={key}
             done={sessions.filter((s) => s.type === 'fallback')}
             onComplete={addSession}
             onRemove={removeSession}
@@ -244,7 +294,7 @@ export function WeekView({ tracker }: { tracker: Tracker }) {
         </>
       )}
 
-      {!stats.pauseActive && (
+      {isCurrentWeek && !stats.pauseActive && (
         <button
           type="button"
           onClick={togglePause}

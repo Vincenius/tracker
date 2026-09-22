@@ -26,7 +26,12 @@ class WeekView extends StatefulWidget {
 
 class _WeekViewState extends State<WeekView> {
   /// Stand beim letzten Build — daran hängt, ob das Wochenziel *gerade* fiel.
-  int? _seen;
+  /// Die Woche gehört dazu: ein Wochenwechsel ist kein Erfolg.
+  ({String key, int count})? _seen;
+
+  /// Angezeigte Woche. Vergangene lassen sich aufschlagen und nachtragen —
+  /// die Zukunft nicht.
+  String? _viewKey;
   bool _justHit = false;
   Timer? _cheerTimer;
 
@@ -39,10 +44,10 @@ class _WeekViewState extends State<WeekView> {
   /// Das Wochenziel ist der größere Moment als die einzelne Einheit — dafür
   /// gibt es die volle Salve. Beim ersten Build wird nie gefeiert, sonst ginge
   /// sie bei jedem Tabwechsel und jedem Sync erneut los.
-  void _checkGoal(int count) {
+  void _checkGoal(String key, int count) {
     final before = _seen;
-    _seen = count;
-    if (before == null || before >= 2 || count < 2) return;
+    _seen = (key: key, count: count);
+    if (before == null || before.key != key || before.count >= 2 || count < 2) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       cheerConfetti(context);
@@ -58,17 +63,24 @@ class _WeekViewState extends State<WeekView> {
   Widget build(BuildContext context) {
     final store = widget.store;
     final stats = store.stats;
-    final key = currentWeekKey();
+    final thisWeek = currentWeekKey();
+    final viewKey = _viewKey ?? thisWeek;
+    final key = viewKey.compareTo(thisWeek) > 0 ? thisWeek : viewKey;
+    final isCurrentWeek = key == thisWeek;
     final week = stats.weeks[key] ?? summarizeWeek(key, const []);
     final sessions = week.sessions;
     final count = sessions.length;
-    _checkGoal(count);
+    _checkGoal(key, count);
     bool has(SessionType t) => sessions.any((s) => s.type == t);
 
     final status = count == 0
-        ? 'Frische Woche. Zwei Einheiten – du kennst den Plan.'
+        ? isCurrentWeek
+            ? 'Frische Woche. Zwei Einheiten – du kennst den Plan.'
+            : 'Keine Einheit eingetragen. Was vergessen?'
         : count == 1
-            ? 'Eine geschafft. Noch eine bis zum Wochenziel.'
+            ? isCurrentWeek
+                ? 'Eine geschafft. Noch eine bis zum Wochenziel.'
+                : 'Eine Einheit. Fehlt noch eine?'
             : count == 2
                 ? 'Wochenziel erreicht. Stark!'
                 : 'Wochenziel übertroffen. Chapeau!';
@@ -79,7 +91,15 @@ class _WeekViewState extends State<WeekView> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (stats.pauseActive) ...[
+        _WeekNav(
+          weekKey: key,
+          isCurrentWeek: isCurrentWeek,
+          onPrev: () => setState(() => _viewKey = addWeeks(key, -1)),
+          onNext: () => setState(() => _viewKey = addWeeks(key, 1)),
+          onToday: () => setState(() => _viewKey = thisWeek),
+        ),
+        const SizedBox(height: 16),
+        if (isCurrentWeek && stats.pauseActive) ...[
           _PauseBanner(stats: stats, onEnd: widget.store.togglePause),
           const SizedBox(height: 16),
         ],
@@ -92,12 +112,14 @@ class _WeekViewState extends State<WeekView> {
           celebrate: _justHit,
         ),
         const SizedBox(height: 16),
-        NutritionCard(
-          stats: stats,
-          addTreat: widget.store.addTreat,
-          removeTreat: widget.store.removeTreat,
-        ),
-        const SizedBox(height: 16),
+        if (isCurrentWeek) ...[
+          NutritionCard(
+            stats: stats,
+            addTreat: widget.store.addTreat,
+            removeTreat: widget.store.removeTreat,
+          ),
+          const SizedBox(height: 16),
+        ],
         WalkCard(week: week, toggleWalk: widget.store.toggleWalk, walkStreak: stats.walkStreak),
         const SizedBox(height: 16),
         StairCard(
@@ -110,6 +132,7 @@ class _WeekViewState extends State<WeekView> {
         const SizedBox(height: 16),
         SessionCard(
           type: SessionType.home,
+          weekKey: key,
           done: [for (final s in sessions) if (s.type == SessionType.home) s],
           onComplete: widget.store.addSession,
           onRemove: widget.store.removeSession,
@@ -118,6 +141,7 @@ class _WeekViewState extends State<WeekView> {
           const SizedBox(height: 16),
           SessionCard(
             type: SessionType.boulder,
+            weekKey: key,
             done: [for (final s in sessions) if (s.type == SessionType.boulder) s],
             onComplete: widget.store.addSession,
             onRemove: widget.store.removeSession,
@@ -136,16 +160,89 @@ class _WeekViewState extends State<WeekView> {
             ),
           SessionCard(
             type: SessionType.fallback,
+            weekKey: key,
             done: [for (final s in sessions) if (s.type == SessionType.fallback) s],
             onComplete: widget.store.addSession,
             onRemove: widget.store.removeSession,
           ),
         ],
-        if (!stats.pauseActive) ...[
+        if (isCurrentWeek && !stats.pauseActive) ...[
           const SizedBox(height: 16),
           _PauseButton(onTap: widget.store.togglePause),
         ],
       ],
+    );
+  }
+}
+
+class _WeekNav extends StatelessWidget {
+  const _WeekNav({
+    required this.weekKey,
+    required this.isCurrentWeek,
+    required this.onPrev,
+    required this.onNext,
+    required this.onToday,
+  });
+
+  final String weekKey;
+  final bool isCurrentWeek;
+  final VoidCallback onPrev;
+  final VoidCallback onNext;
+  final VoidCallback onToday;
+
+  @override
+  Widget build(BuildContext context) {
+    Widget arrow(String glyph, String label, VoidCallback? onTap) => Semantics(
+          label: label,
+          button: true,
+          child: Opacity(
+            opacity: onTap == null ? 0.3 : 1,
+            child: InkWell(
+              onTap: onTap,
+              borderRadius: BorderRadius.circular(8),
+              child: SizedBox(
+                width: 40,
+                height: 36,
+                child: Center(
+                  child: Text(glyph, style: const TextStyle(fontSize: 18, color: C.chalkDim)),
+                ),
+              ),
+            ),
+          ),
+        );
+
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        border: Border.all(color: C.rock800),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          arrow('‹', 'Vorherige Woche', onPrev),
+          Expanded(
+            child: isCurrentWeek
+                ? const Text(
+                    'Diese Woche',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                  )
+                : GestureDetector(
+                    onTap: onToday,
+                    child: Text(
+                      'Nachtragen · KW ${weekNumber(weekKey)} — zurück zu heute',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: C.tape,
+                      ),
+                    ),
+                  ),
+          ),
+          arrow('›', 'Nächste Woche', isCurrentWeek ? null : onNext),
+        ],
+      ),
     );
   }
 }

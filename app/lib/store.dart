@@ -238,12 +238,22 @@ class TrackerStore extends ChangeNotifier with WidgetsBindingObserver {
     flash(msg);
   }
 
-  void addSession(SessionType type, Intensity intensity, [List<String> done = const []]) {
+  /// Einheit abhaken — standardmäßig heute. Vergangene Tage lassen sich
+  /// nachtragen, künftige nicht; die Woche ergibt sich aus `date`.
+  void addSession(
+    SessionType type,
+    Intensity intensity, [
+    List<String> done = const [],
+    String? date,
+  ]) {
+    final today = toISODate(DateTime.now());
+    final day = date ?? today;
+    if (day.compareTo(today) > 0) return;
     final session = Session(
       id: _newId(),
       type: type,
       intensity: intensity,
-      date: toISODate(DateTime.now()),
+      date: day,
       ts: DateTime.now().millisecondsSinceEpoch,
       done: done,
     );
@@ -309,22 +319,26 @@ class TrackerStore extends ChangeNotifier with WidgetsBindingObserver {
     );
   }
 
-  /// Treppe genommen — zählt sofort, beliebig oft am Tag.
-  void addStair() {
+  /// Treppe genommen — zählt sofort, beliebig oft am Tag. Vergangene Tage
+  /// lassen sich nachtragen, künftige nicht.
+  void addStair([String? date]) {
+    final today = toISODate(DateTime.now());
+    final day = date ?? today;
+    if (day.compareTo(today) > 0) return;
     final stair = Stair(
       id: _newId(),
-      date: toISODate(DateTime.now()),
+      date: day,
       ts: DateTime.now().millisecondsSinceEpoch,
     );
     _commitEarned(stairs: [..._data.stairs, stair]);
   }
 
-  /// Den jüngsten heutigen Aufstieg zurücknehmen — für den Fall eines Fehlklicks.
-  void removeStair() {
-    final today = toISODate(DateTime.now());
-    final todays = [for (final s in _data.stairs) if (s.date == today) s];
-    if (todays.isEmpty) return;
-    final last = todays.last;
+  /// Den jüngsten Aufstieg dieses Tages zurücknehmen — für den Fall eines Fehlklicks.
+  void removeStair([String? date]) {
+    final day = date ?? toISODate(DateTime.now());
+    final onDay = [for (final s in _data.stairs) if (s.date == day) s];
+    if (onDay.isEmpty) return;
+    final last = onDay.last;
     _commitRemoved(
       [last.id],
       'Aufstieg zurückgenommen.',

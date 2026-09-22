@@ -1,8 +1,12 @@
+import { addDays, currentWeekKey, shortDate, toISODate, weekdayLabel } from '../lib/date';
 import type { WeekSummary } from '../lib/stats';
 import type { Tracker } from '../lib/store';
 import { XP_STAIR } from '../lib/types';
+import { CountDay } from './CountDay';
 
 const STAIR_COLOR = 'var(--color-grade-yellow)';
+
+const DAYS = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
 
 interface Props {
   week: WeekSummary;
@@ -13,20 +17,30 @@ interface Props {
 }
 
 export function StairCard({ week, stairToday, stairStreak, addStair, removeStair }: Props) {
-  const status =
-    stairToday === 0
+  const today = toISODate(new Date());
+  const isCurrentWeek = week.key === currentWeekKey();
+  const perDay = new Map<string, number>();
+  for (const s of week.stairs) perDay.set(s.date, (perDay.get(s.date) ?? 0) + 1);
+
+  // In einer vergangenen Woche gibt es kein „heute“ — da zählt die Woche.
+  const shown = isCurrentWeek ? stairToday : week.stairCount;
+  const status = !isCurrentWeek
+    ? week.stairCount === 0
+      ? 'Keine Treppe eingetragen. Vergessen? Tag antippen trägt nach.'
+      : `In dieser Woche ${week.stairCount}× die Treppe genommen.`
+    : stairToday === 0
       ? 'Aufzug links liegen lassen — jeder Aufstieg zählt.'
       : `Heute schon ${stairToday}× die Treppe genommen.`;
 
   return (
     <section
       className="chalk-edge chalk-dust relative overflow-hidden rounded-2xl border bg-rock-900/80"
-      style={{ borderColor: stairToday > 0 ? STAIR_COLOR : 'var(--color-rock-700)' }}
+      style={{ borderColor: shown > 0 ? STAIR_COLOR : 'var(--color-rock-700)' }}
     >
       <div
         aria-hidden="true"
         className="absolute inset-x-0 top-0 h-1"
-        style={{ background: STAIR_COLOR, opacity: stairToday > 0 ? 1 : 0.45 }}
+        style={{ background: STAIR_COLOR, opacity: shown > 0 ? 1 : 0.45 }}
       />
 
       <div className="flex items-start gap-3 p-4 pt-5">
@@ -49,39 +63,63 @@ export function StairCard({ week, stairToday, stairStreak, addStair, removeStair
           <p className="mt-1 text-sm text-chalk-dim">{status}</p>
         </div>
         <span
-          key={stairToday}
+          key={shown}
           className="animate-bump shrink-0 font-display text-2xl leading-none tabular-nums"
         >
-          {stairToday}
+          {shown}
           <span className="text-chalk-faint">×</span>
         </span>
       </div>
 
       <div className="px-4 pb-4">
-        <div className="flex items-stretch gap-2">
-          <button
-            type="button"
-            onClick={removeStair}
-            disabled={stairToday === 0}
-            aria-label="Letzten Aufstieg zurücknehmen"
-            className="w-12 rounded-xl border border-rock-700 bg-rock-850 text-xl font-semibold text-chalk-dim transition hover:border-rock-500 active:scale-[0.96] disabled:cursor-not-allowed disabled:opacity-35"
-          >
-            −
-          </button>
-          <button
-            type="button"
-            onClick={addStair}
-            className="flex-1 rounded-xl py-3 text-sm font-semibold text-rock-950 transition hover:brightness-110 active:scale-[0.98]"
-            style={{ background: STAIR_COLOR }}
-          >
-            + Treppe genommen · {XP_STAIR} XP
-          </button>
+        {isCurrentWeek && (
+          <div className="mb-2 flex items-stretch gap-2">
+            <button
+              type="button"
+              onClick={() => removeStair(today)}
+              disabled={stairToday === 0}
+              aria-label="Letzten Aufstieg zurücknehmen"
+              className="w-12 rounded-xl border border-rock-700 bg-rock-850 text-xl font-semibold text-chalk-dim transition hover:border-rock-500 active:scale-[0.96] disabled:cursor-not-allowed disabled:opacity-35"
+            >
+              −
+            </button>
+            <button
+              type="button"
+              onClick={() => addStair(today)}
+              className="flex-1 rounded-xl py-3 text-sm font-semibold text-rock-950 transition hover:brightness-110 active:scale-[0.98]"
+              style={{ background: STAIR_COLOR }}
+            >
+              + Treppe genommen · {XP_STAIR} XP
+            </button>
+          </div>
+        )}
+
+        {/* Die Woche Tag für Tag — vergessene Aufstiege lassen sich nachtragen. */}
+        <div className="grid grid-cols-7 gap-1.5">
+          {DAYS.map((label, i) => {
+            const date = addDays(week.key, i);
+            const count = perDay.get(date) ?? 0;
+            return (
+              <CountDay
+                key={date}
+                count={count}
+                color={STAIR_COLOR}
+                disabled={date > today}
+                today={date === today}
+                label={label}
+                title={`${weekdayLabel(date)}, ${shortDate(date)} — Treppe: ${count}×`}
+                onAdd={() => addStair(date)}
+                onRemove={() => removeStair(date)}
+              />
+            );
+          })}
         </div>
 
         <p className="mt-2 text-xs text-chalk-faint">
           {stairStreak > 0
             ? `🔥 ${stairStreak} ${stairStreak === 1 ? 'Tag' : 'Tage'} in Folge · diese Woche ${week.stairCount}×`
-            : `So oft du willst — jeder Aufstieg bringt ${XP_STAIR} XP. Diese Woche ${week.stairCount}×.`}
+            : `So oft du willst — jeder Aufstieg bringt ${XP_STAIR} XP. Diese Woche ${week.stairCount}×.`}{' '}
+          Tag antippen trägt nach, gedrückt halten nimmt zurück.
         </p>
       </div>
     </section>

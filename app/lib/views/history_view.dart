@@ -48,21 +48,23 @@ class _HistoryViewState extends State<HistoryView> {
         stats.weeks[k] ?? summarizeWeek(k, const []),
     ];
 
-    // Werktage der letzten 8 Wochen, zeilenweise Mo–Fr.
+    // Werktage der letzten 8 Wochen: eine Spalte pro Woche, Mo–Fr untereinander.
     final todayDate = toISODate(DateTime.now());
     final walkedDates = {
       for (final w in stats.orderedWeeks)
         for (final walk in w.walks) walk.date,
     };
     final recent = weeks.length > 8 ? weeks.sublist(weeks.length - 8) : weeks;
-    final walkDays = [
+    final walkWeeks = [
       for (final w in recent)
-        for (var i = 0; i < 5; i++)
-          (
-            date: addDays(w.key, i),
-            done: walkedDates.contains(addDays(w.key, i)),
-            future: addDays(w.key, i).compareTo(todayDate) > 0,
-          ),
+        [
+          for (var i = 0; i < 5; i++)
+            (
+              date: addDays(w.key, i),
+              done: walkedDates.contains(addDays(w.key, i)),
+              future: addDays(w.key, i).compareTo(todayDate) > 0,
+            ),
+        ],
     ];
     // Ernährung läuft an allen sieben Tagen — hier die letzten 8 Wochen am Stück.
     final foodDays = [
@@ -147,34 +149,61 @@ class _HistoryViewState extends State<HistoryView> {
           StatTile(value: stats.fulfilledWeeks, label: 'Volle Wochen'),
         ]),
         const SizedBox(height: 20),
+        _XpSources(stats: stats, week: stats.weeks[thisWeek] ?? summarizeWeek(thisWeek, const [])),
+        const SizedBox(height: 20),
         TrackerCard(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               const CardTitle(
                 'Spaziergänge',
-                subtitle: 'Ein Punkt pro Werktag der letzten Wochen. '
+                subtitle: 'Eine Spalte pro Woche, ein Feld pro Werktag. '
                     'Das Wochenende bleibt frei.',
               ),
               const SizedBox(height: 16),
-              GridView.count(
-                crossAxisCount: 5,
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                mainAxisSpacing: 6,
-                crossAxisSpacing: 6,
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  for (final d in walkDays)
-                    Opacity(
-                      opacity: d.future ? 0.3 : 1,
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: d.done ? C.gradeGreen : C.rock800,
-                          border: Border.all(
-                            color: d.done ? Colors.transparent : C.rock700,
+                  Padding(
+                    padding: const EdgeInsets.only(right: 4),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        for (final d in const ['Mo', 'Di', 'Mi', 'Do', 'Fr'])
+                          SizedBox(
+                            height: 20,
+                            child: Text(
+                              d,
+                              style: const TextStyle(fontSize: 10, color: C.chalkFaint),
+                            ),
                           ),
-                          borderRadius: BorderRadius.circular(5),
-                        ),
+                      ],
+                    ),
+                  ),
+                  for (final days in walkWeeks)
+                    Padding(
+                      padding: const EdgeInsets.only(right: 4),
+                      child: Column(
+                        children: [
+                          for (final d in days)
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 4),
+                              child: Opacity(
+                                opacity: d.future ? 0.3 : 1,
+                                child: Container(
+                                  width: 16,
+                                  height: 16,
+                                  decoration: BoxDecoration(
+                                    color: d.done ? C.gradeGreen : C.rock800,
+                                    border: Border.all(
+                                      color: d.done ? Colors.transparent : C.rock700,
+                                    ),
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                ),
+                              ),
+                            ),
+                        ],
                       ),
                     ),
                 ],
@@ -360,6 +389,144 @@ class _HistoryViewState extends State<HistoryView> {
           },
         ),
       ],
+    );
+  }
+}
+
+String _signed(int xp) => xp > 0 ? '+$xp' : xp < 0 ? '−${-xp}' : '0';
+
+typedef _XpSource = ({String label, Color color, String detail, int xp, int weekXp});
+
+/// Wie viel jede Art von Eintrag insgesamt und in dieser Woche gebracht (oder gekostet) hat.
+List<_XpSource> _xpSources(Stats stats, WeekSummary week) {
+  final sessions = [for (final w in stats.orderedWeeks) ...w.sessions];
+  int sum(Iterable<Session> list) => list.fold(0, (acc, s) => acc + xpFor(s));
+  return [
+    for (final t in const [SessionType.boulder, SessionType.home, SessionType.fallback])
+      (
+        label: sessionMeta[t]!.title,
+        color: sessionMeta[t]!.color,
+        detail: '${stats.byType[t]}×',
+        xp: sum(sessions.where((s) => s.type == t)),
+        weekXp: sum(week.sessions.where((s) => s.type == t)),
+      ),
+    (
+      label: 'Spaziergänge',
+      color: C.gradeGreen,
+      detail: '${stats.walkTotal}× · je $xpWalk XP',
+      xp: stats.walkTotal * xpWalk,
+      // Wie in den Stats zählt pro Tag ein Spaziergang.
+      weekXp: {for (final w in week.walks) w.date}.length * xpWalk,
+    ),
+    (
+      label: 'Treppe',
+      color: C.gradeYellow,
+      detail: '${stats.stairTotal}× · je $xpStair XP',
+      xp: stats.stairTotal * xpStair,
+      weekXp: week.stairCount * xpStair,
+    ),
+    for (final lane in laneList)
+      (
+        label: lane.title,
+        color: lane.color,
+        detail: '${stats.lanes[lane.kind]!.total}× · je −$xpTreat XP',
+        xp: -stats.lanes[lane.kind]!.xpLost,
+        weekXp: -(week.treatsByKind[lane.kind] ?? 0) * xpTreat,
+      ),
+  ];
+}
+
+class _XpSources extends StatelessWidget {
+  const _XpSources({required this.stats, required this.week});
+
+  final Stats stats;
+  final WeekSummary week;
+
+  @override
+  Widget build(BuildContext context) {
+    final sources = _xpSources(stats, week);
+    final max = sources.fold(1, (m, s) => s.xp.abs() > m ? s.xp.abs() : m);
+    final gained = sources.fold(0, (acc, s) => acc + (s.xp > 0 ? s.xp : 0));
+    final lost = sources.fold(0, (acc, s) => acc + (s.xp < 0 ? -s.xp : 0));
+
+    return TrackerCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          CardTitle(
+            'XP-Quellen',
+            subtitle: 'Woher deine ${stats.xp} XP kommen — insgesamt und in dieser Woche.',
+          ),
+          const SizedBox(height: 16),
+          for (final s in sources)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        width: 10,
+                        height: 10,
+                        decoration: BoxDecoration(color: s.color, shape: BoxShape.circle),
+                      ),
+                      const SizedBox(width: 8),
+                      Flexible(
+                        child: Text(
+                          s.label,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(s.detail, style: const TextStyle(fontSize: 12, color: C.chalkFaint)),
+                      const Spacer(),
+                      Text(
+                        'Woche ${_signed(s.weekXp)}',
+                        style: const TextStyle(fontSize: 12, color: C.chalkFaint),
+                      ),
+                      SizedBox(
+                        width: 64,
+                        child: Text(
+                          _signed(s.xp),
+                          textAlign: TextAlign.right,
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: s.xp < 0 ? C.gradeRed : C.chalk,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(999),
+                    child: SizedBox(
+                      height: 6,
+                      child: Stack(
+                        children: [
+                          Container(color: C.rock800),
+                          FractionallySizedBox(
+                            widthFactor: s.xp.abs() / max,
+                            child: Container(color: s.color),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          const Divider(color: C.rock800, height: 1),
+          const SizedBox(height: 12),
+          Hint(
+            '${_signed(gained)} verdient · ${_signed(-lost)} verloren = ${stats.xp} XP'
+            '${gained - lost < 0 ? ' (unter null geht es nicht)' : ''}',
+          ),
+        ],
+      ),
     );
   }
 }
